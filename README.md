@@ -4,23 +4,23 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://github.com/epuzanov/gsrs-rag-gateway/actions/workflows/tests.yml/badge.svg)](https://github.com/epuzanov/gsrs-rag-gateway/actions)
 
-Retrieval-Augmented Generation (RAG) Gateway für GSRS (Global Substance Registration System) Substanzen mit **pgvector** oder **ChromaDB** als Vektordatenbank.
+Retrieval-Augmented Generation (RAG) Gateway for GSRS (Global Substance Registration System) substances with **pgvector** or **ChromaDB** as vector database.
 
 ## Features
 
-- 🧩 **Intelligentes Chunking**: Automatische Aufteilung von GSRS Substance JSON Dokumenten in elementbasierte Chunks
-- 🔍 **Vektorsuche**: Semantische Suche mit pgvector (Production) oder ChromaDB (Development)
-- 🎯 **Element Path IDs**: Eindeutige IDs für Chunks basierend auf Element-Pfaden
-- 📊 **Metadata-Retention**: Vollständige Metadaten für jedes Element in Embeddings
-- 🔄 **SubstanceClass Filter**: Filterung nach Substanztyp (chemical, protein, nucleicAcid, etc.)
-- 🎨 **Embedding Provider**: OpenAI API, Azure OpenAI, Ollama und OpenAI-kompatible APIs
-- 🔐 **Authentication**: HTTP Basic Auth und API Key Unterstützung
-- 🗄️ **Multi-Backend**: pgvector (PostgreSQL) oder ChromaDB (lokal, serverless)
-- 🐳 **Docker Deployment**: Einfache Bereitstellung mit Docker Compose
-- 📥 **Bulk-Loading**: Ladeskript für JSONL-Dateien
-- ✅ **Unit Tests**: Vollständige Testabdeckung mit pytest
+- 🧩 **Intelligent Chunking**: Automatic splitting of GSRS Substance JSON documents into element-based chunks
+- 🔍 **Vector Search**: Semantic search with pgvector (Production) or ChromaDB (Development)
+- 🎯 **Element Path IDs**: Unique IDs for chunks based on element paths
+- 📊 **Metadata Retention**: Complete metadata for each element in embeddings
+- 🔄 **SubstanceClass Filter**: Filtering by substance type (chemical, protein, nucleicAcid, etc.)
+- 🎨 **Embedding Provider**: OpenAI API, Azure OpenAI, Ollama and OpenAI-compatible APIs
+- 🔐 **Authentication**: HTTP Basic Auth and API Key support
+- 🗄️ **Multi-Backend**: pgvector (PostgreSQL) or ChromaDB (local, serverless)
+- 🐳 **Docker Deployment**: Easy deployment with Docker Compose
+- 📥 **Bulk Loading**: Loading script for JSONL files
+- ✅ **Unit Tests**: Complete test coverage with pytest
 
-## Architektur
+## Architecture
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
@@ -53,81 +53,81 @@ Retrieval-Augmented Generation (RAG) Gateway für GSRS (Global Substance Registr
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Schnellstart
+## Quick Start
 
-### Option 1: Production mit PostgreSQL + pgvector (Docker)
+### Option 1: Production with PostgreSQL + pgvector (Docker)
 
 ```bash
-# .env Datei erstellen und konfigurieren
+# Create .env file and configure
 cp .env.example .env
-# Bearbeite .env und setze:
+# Edit .env and set:
 #   DATABASE_URL=postgresql://gsrs:your_password@postgres:5432/gsrs_rag
 #   EMBEDDING_API_KEY=sk-your-key
 
-# Alle Services starten (PostgreSQL + RAG Gateway)
+# Start all services (PostgreSQL + RAG Gateway)
 docker-compose --profile postgres up -d
 
-# Mit Open WebUI (für Ollama Integration)
+# With Open WebUI (for Ollama integration)
 docker-compose --profile postgres --profile ollama up -d
 ```
 
-### Option 2: Development mit ChromaDB (Docker)
+### Option 2: Development with ChromaDB (Docker)
 
 ```bash
-# .env Datei erstellen
+# Create .env file
 cp .env.example .env
-# DATABASE_URL ist bereits auf ChromaDB vorkonfiguriert
+# DATABASE_URL is already preconfigured for ChromaDB
 
-# ChromaDB + RAG Gateway starten
+# Start ChromaDB + RAG Gateway
 docker-compose --profile chroma up -d
 ```
 
-### Option 3: Local Development (ohne Docker)
+### Option 3: Local Development (without Docker)
 
 ```bash
-# Virtuelle Umgebung erstellen
+# Create virtual environment
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
-# oder: venv\Scripts\activate  # Windows
+# or: venv\Scripts\activate  # Windows
 
-# Abhängigkeiten installieren
+# Install dependencies
 pip install -r requirements.txt
 
-# .env Datei erstellen
+# Create .env file
 cp .env.example .env
 
-# EMBEDDING_API_KEY setzen
+# Set EMBEDDING_API_KEY
 export EMBEDDING_API_KEY="sk-your-key"
 
-# Gateway starten
+# Start gateway
 uvicorn app.main:app --reload
 ```
 
-### Authentifizierung
+### Authentication
 
 ```bash
-# Standard Admin Benutzer
+# Default admin user
 # Username: admin
-# Password: admin123 (oder API_PASSWORD in .env ändern)
+# Password: admin123 (or change API_PASSWORD in .env)
 
-# API mit Authentifizierung nutzen
+# Use API with authentication
 curl -u admin:admin123 http://localhost:8000/health
 ```
 
-### Gesundheit prüfen
+### Check Health
 
 ```bash
 curl http://localhost:8000/health
 ```
 
-### Beispieldaten laden
+### Load Sample Data
 
 ```bash
-# Substanzen von GSRS Server laden
+# Load substances from GSRS server
 python scripts/load_data.py \
   --uuids 0103a288-6eb6-4ced-b13a-849cd7edf028,80edf0eb-b6c5-4a9a-adde-28c7254046d9
 
-# Statistiken prüfen
+# Check statistics
 curl -u admin:admin123 http://localhost:8000/statistics
 ```
 
@@ -139,7 +139,7 @@ curl -u admin:admin123 http://localhost:8000/statistics
 GET /health
 ```
 
-### Substance ingestieren
+### Ingest Substance
 
 ```bash
 POST /ingest
@@ -162,7 +162,7 @@ Content-Type: application/json
 }
 ```
 
-### Semantische Suche
+### Semantic Search
 
 ```bash
 POST /query
@@ -171,93 +171,95 @@ Content-Type: application/json
 {
     "query": "CAS code for Aspirin",
     "top_k": 5,
-    "filters": {}  // optionale Metadata-Filter
+    "filters": {}  // optional metadata filters
 }
 ```
 
-### Substance löschen
+### Delete Substance
 
 ```bash
 DELETE /substances/{substance_uuid}
 Authorization: Basic YWRtaW46YWRtaW4xMjM=
 ```
 
-### Verfügbare Embedding Modelle
+### Available Embedding Models
 
 ```bash
 GET /models
 ```
 
-### Substance Klassen
+### Substance Classes
 
 ```bash
 GET /substance-classes
 ```
 
-### Statistiken
+### Statistics
 
 ```bash
 GET /statistics
 ```
 
-## Konfiguration
+## Configuration
 
-Umgebungsvariablen (`.env` Datei):
+Environment variables (`.env` file):
 
 ```bash
 # =============================================================================
 # DATABASE CONFIGURATION
 # =============================================================================
-# Database URL - Schema bestimmt Backend automatisch:
+# Database URL - Schema determines backend automatically:
 # - PostgreSQL: postgresql://user:pass@host:port/dbname
 # - ChromaDB: chroma://./chroma_data/substance_chunks
 
-# Für ChromaDB (Development/Testing - Default):
+# For ChromaDB (Development/Testing - Default):
 DATABASE_URL=chroma://./chroma_data/substance_chunks
 
-# Für PostgreSQL (Production - uncomment):
+# For PostgreSQL (Production - uncomment):
 # DATABASE_URL=postgresql://gsrs:your_secure_password@localhost:5432/gsrs_rag
 
 # =============================================================================
 # EMBEDDING API CONFIGURATION
 # =============================================================================
-# Funktioniert mit OpenAI, Azure OpenAI, Ollama und OpenAI-kompatiblen APIs
+# Works with OpenAI, Azure OpenAI, Ollama and OpenAI-compatible APIs
 
 # OpenAI (Production):
 EMBEDDING_API_KEY=sk-your-api-key-here
 EMBEDDING_BASE_URL=https://api.openai.com/v1
 
-# Azure OpenAI (uncomment für Azure):
+# Azure OpenAI (uncomment for Azure):
 # EMBEDDING_API_KEY=your-azure-key
 # EMBEDDING_BASE_URL=https://your-resource.openai.azure.com/openai/deployments/your-deployment
 
-# Ollama (Local/Development - uncomment für lokale Embeddings):
+# Ollama (Local/Development - uncomment for local embeddings):
 # EMBEDDING_API_KEY=ollama
 # EMBEDDING_BASE_URL=http://host.docker.internal:11434/v1
 
 # =============================================================================
 # EMBEDDING MODEL CONFIGURATION
 # =============================================================================
-# OpenAI Modelle:
-#   - text-embedding-3-small (1536 dim, empfohlen)
-#   - text-embedding-3-large (3072 dim, höchste Qualität)
+# OpenAI models:
+#   - text-embedding-3-small (1536 dim, recommended)
+#   - text-embedding-3-large (3072 dim, highest quality)
 #   - text-embedding-ada-002 (1536 dim, legacy)
 
-# Ollama Modelle:
-#   - nomic-embed-text (768 dim, leichtgewichtig)
-#   - mxbai-embed-large (1024 dim, hohe Qualität)
+# Ollama models:
+#   - nomic-embed-text (768 dim, lightweight)
+#   - mxbai-embed-large (1024 dim, high quality)
+#   - qwen3-embedding:latest (1024 dim, high quality)
+#   - all-minilm (384 dim, smallest)
 
 EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_DIMENSION=1536
 
-# Für Ollama (uncomment für lokale Embeddings):
+# For Ollama (uncomment for local embeddings):
 # EMBEDDING_MODEL=nomic-embed-text
 # EMBEDDING_DIMENSION=768
 
 # =============================================================================
 # AUTHENTICATION CONFIGURATION (HTTP Basic Auth)
 # =============================================================================
-# In Production ändern!
+# Change in Production!
 API_USERNAME=admin
 API_PASSWORD=admin123
 
@@ -269,9 +271,9 @@ API_PORT=8000
 DEFAULT_TOP_K=5
 ```
 
-### Embedding Provider
+### Embedding Providers
 
-#### OpenAI (und kompatible APIs)
+#### OpenAI (and compatible APIs)
 
 ```bash
 EMBEDDING_PROVIDER=openai
@@ -281,9 +283,9 @@ OPENAI_API_KEY=sk-...
 OPENAI_BASE_URL=https://api.openai.com/v1
 ```
 
-**Unterstützte Modelle:**
-- `text-embedding-3-small` (1536 dim) - Schnell und effizient
-- `text-embedding-3-large` (3072 dim) - Höchste Qualität
+**Supported models:**
+- `text-embedding-3-small` (1536 dim) - Fast and efficient
+- `text-embedding-3-large` (3072 dim) - Highest quality
 - `text-embedding-ada-002` (1536 dim) - Legacy
 
 **Azure OpenAI:**
@@ -292,7 +294,7 @@ EMBEDDING_API_KEY=your-azure-key
 EMBEDDING_BASE_URL=https://your-resource.openai.azure.com/openai/deployments/your-deployment
 ```
 
-#### Ollama (Lokale Modelle)
+#### Ollama (Local Models)
 
 ```bash
 EMBEDDING_API_KEY=ollama
@@ -301,15 +303,16 @@ EMBEDDING_DIMENSION=768
 EMBEDDING_BASE_URL=http://localhost:11434/v1
 ```
 
-**Unterstützte Modelle:**
+**Supported models:**
 - `nomic-embed-text` (768 dim)
 - `mxbai-embed-large` (1024 dim)
-- `all-minilm` (384 dim)
-- Und alle anderen Ollama Embedding Modelle
+- `qwen3-embedding:latest` (1024 dim, high quality)
+- `all-minilm` (384 dim, smallest)
+- And all other Ollama embedding models
 
-## Daten laden
+## Loading Data
 
-### Aus JSON Dateien
+### From JSON Files
 
 ```bash
 curl -X POST http://localhost:8000/ingest \
@@ -318,61 +321,27 @@ curl -X POST http://localhost:8000/ingest \
     -d @substance.json
 ```
 
-### Aus .gsrs Dateien (JSONL.gz)
+### From .gsrs Files (JSONL.gz)
 
 ```bash
 python scripts/load_data.py data/substances.gsrs --batch-size 100
 ```
 
-### Sample Daten herunterladen
-
-```bash
-python scripts/download_samples.py
-```
-
-## Integration mit LLMs
-
-### ChatGPT Integration
-
-```bash
-# Zusätzliche Abhängigkeiten installieren
-pip install -r requirements-examples.txt
-
-# API Key setzen
-export OPENAI_API_KEY="sk-..."
-
-# Frage stellen
-python examples/chatgpt_integration.py "What is the molecular formula of Aspirin?"
-```
-
-### Ollama Integration (Lokal)
-
-```bash
-# Ollama installieren: https://ollama.ai
-ollama pull llama3.1
-
-# Embedding Modell für RAG (wird im Gateway verwendet)
-ollama pull nomic-embed-text
-
-# Frage stellen
-python examples/ollama_integration.py "What is the CAS code for Ibuprofen?"
-```
-
 ### Open WebUI Integration
 
 ```bash
-# Mit Open WebUI Profil starten
+# Start with Open WebUI profile
 docker-compose --profile ollama up -d
 
-# Open WebUI im Browser öffnen
+# Open Open WebUI in browser
 # http://localhost:3000
 ```
 
-## Chunking Strategie
+## Chunking Strategy
 
-Jedes GSRS Substance Dokument wird in Chunks basierend auf Element-Pfaden aufgeteilt:
+Each GSRS substance document is split into chunks based on element paths:
 
-### Beispiel
+### Example
 
 **Input JSON:**
 ```json
@@ -392,7 +361,7 @@ Jedes GSRS Substance Dokument wird in Chunks basierend auf Element-Pfaden aufget
 }
 ```
 
-**Erstellte Chunks:**
+**Created Chunks:**
 | Element Path | Chunk Text | Metadata |
 |--------------|------------|----------|
 | `root_codes_0_code` | code: WK2XYI10QM | {codeSystem: FDA UNII} |
@@ -400,61 +369,65 @@ Jedes GSRS Substance Dokument wird in Chunks basierend auf Element-Pfaden aufget
 | `root_codes_1_code` | code: CHEMBL521 | {codeSystem: ChEMBL} |
 | `root_codes_1_codeSystem` | codeSystem: ChEMBL | {} |
 
-## Entwicklung
+## Development
 
-### Lokale Entwicklung ohne Docker
+### Local Development without Docker
 
 ```bash
-# PostgreSQL mit pgvector installieren
+# Install PostgreSQL with pgvector
 # Ubuntu: sudo apt install postgresql-16-pgvector
 
-# Virtuelle Umgebung erstellen
+# Create virtual environment
 python -m venv venv
 source venv/bin/activate
 
-# Abhängigkeiten installieren
+# Install dependencies
 pip install -r requirements.txt
 
-# .env Datei erstellen
+# Create .env file
 cp .env.example .env
 
-# OPENAI_API_KEY setzen (für OpenAI Embeddings)
+# Set OPENAI_API_KEY (for OpenAI embeddings)
 export OPENAI_API_KEY="sk-..."
 
-# Datenbank erstellen
+# Create database
 createdb -U postgres gsrs_rag
 
-# App starten
+# Start app
 uvicorn app.main:app --reload
 ```
 
 ### Tests
 
 ```bash
-# Unit Tests für Vector Database Backends
+# Unit tests for Vector Database Backends
 python -m pytest tests/ -v
 
-# Nur ChromaDB Tests
+# Only ChromaDB tests
 python -m pytest tests/test_vector_db.py -v
 
-# Chunking Tests
+# Chunking tests
 python -m pytest tests/test_chunking.py -v
 ```
 
-## Projektstruktur
+## Project Structure
 
 ```
 gsrs-rag-gateway/
 ├── app/
 │   ├── __init__.py
-│   ├── config.py              # Konfiguration
-│   ├── main.py                # FastAPI App
+│   ├── config.py              # Configuration
+│   ├── main.py                # FastAPI app
 │   ├── models/
-│   │   └── db.py              # SQLAlchemy Modelle
+│   |   ├── __init__.py
+│   │   ├── api.py             # API models
+│   │   └── db.py              # SQLAlchemy models
 │   ├── db/
+│   |   ├── __init__.py
 │   │   ├── base.py            # Vector Database Interface
 │   │   ├── factory.py         # Backend Factory
 │   │   └── backends/
+│   |       ├── __init__.py
 │   │       ├── chroma.py      # ChromaDB Backend
 │   │       └── pgvector.py    # pgvector Backend
 │   └── services/
@@ -463,97 +436,102 @@ gsrs-rag-gateway/
 │       ├── embedding.py       # EmbeddingService
 │       └── vector_database.py # VectorDatabaseService
 ├── scripts/
-│   ├── load_data.py           # Ladeskript für .gsrs Dateien
-│   ├── download_samples.py    # Sample Daten Downloader
-│   └── test_gateway.py        # Quick Test Script
+│   └──load_data.py            # Loading script for .gsrs files
 ├── examples/
-│   ├── chatgpt_integration.py
-│   ├── ollama_integration.py
-│   └── embedding_examples.py
+│   ├── gsrs_function.py       # ollama function script
+│   └── gsrs_tool.py           # ollama tools script
 ├── tests/
 │   ├── test_chunking.py
+│   ├── test_load_data.py
 │   └── test_vector_db.py
 ├── docs/
-│   ├── quickstart.md
-│   ├── configuration.md
+│   ├── api-reference.md
 │   ├── authentication.md
+│   ├── configuration.md
 │   ├── data-loading.md
+│   ├── quickstart.md
+│   ├── README.md
 │   ├── troubleshooting.md
 │   ├── vector-databases.md
 │   └── guides/
 │       ├── chunking.md
 │       ├── chatgpt.md
 │       └── ollama-open-webui.md
-├── Dockerfile
+├── .env.example
+├── .gitignore
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── CONTRIBUTING.md
 ├── docker-compose.yaml
-├── requirements.txt
-├── requirements-examples.txt
+├── Dockerfile
+├── LICENSE
 ├── pyproject.toml
-└── README.md
+├── README.md
+├── requirements-examples.txt
+└── requirements.txt
 ```
 
-## API Dokumentation
+## API Documentation
 
-Die vollständige API Dokumentation ist unter Swagger UI verfügbar:
+Full API documentation is available in Swagger UI:
 
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
-## Fehlerbehebung
+## Troubleshooting
 
-### Datenbank Verbindung fehlgeschlagen
+### Database Connection Failed
 
 ```bash
-# PostgreSQL Logs prüfen
+# Check PostgreSQL logs
 docker-compose logs postgres
 
-# Verbindung testen
+# Test connection
 docker-compose exec postgres pg_isready -U gsrs
 ```
 
-### Embedding API Fehler (OpenAI)
+### Embedding API Errors (OpenAI)
 
 ```bash
-# API Key prüfen
+# Check API key
 echo $EMBEDDING_API_KEY
 
-# API Verfügbarkeit testen
+# Test API availability
 curl https://api.openai.com/v1/models \
   -H "Authorization: Bearer $EMBEDDING_API_KEY"
 ```
 
-### Embedding API Fehler (Ollama)
+### Embedding API Errors (Ollama)
 
 ```bash
-# Ollama Status prüfen
+# Check Ollama status
 curl http://localhost:11434/api/tags
 
-# Modell pullen
+# Pull model
 ollama pull nomic-embed-text
 ```
 
-### Vektorsuche gibt keine Ergebnisse
+### Vector Search Returns No Results
 
 ```bash
-# Prüfen ob Daten geladen sind
+# Check if data is loaded
 curl http://localhost:8000/statistics
 
-# Substance Klassen prüfen
+# Check substance classes
 curl http://localhost:8000/substance-classes
 ```
 
-## Lizenz
+## License
 
-MIT License - siehe [LICENSE](LICENSE) Datei.
+MIT License - see [LICENSE](LICENSE) file.
 
-## Beiträge
+## Contributing
 
-Beiträge sind willkommen! Bitte erstelle ein Issue oder Pull Request für Verbesserungen.
+Contributions are welcome! Please create an issue or pull request for improvements.
 
 ## Links
 
 - [GitHub Repository](https://github.com/epuzanov/gsrs-rag-gateway)
 - [GSRS Model Library](https://github.com/epuzanov/gsrs.model)
-- [GSRS Specification](https://github.com/IHEC/gsrs)
 - [pgvector](https://github.com/pgvector/pgvector)
 - [ChromaDB](https://docs.trychroma.com/)
