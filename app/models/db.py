@@ -1,0 +1,79 @@
+"""
+GSRS RAG Gateway - Vector Database Abstract Interface
+"""
+from typing import Any, List, Dict, Optional
+from uuid import UUID, uuid4
+
+from sqlalchemy import String, Text, DateTime, JSON, Index
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.sql import func as sql_func
+from pgvector.sqlalchemy import Vector
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class VectorDocument(Base):
+    """
+    Represents a chunk of a GSRS Substance document.
+    Each chunk corresponds to a specific section in the substance JSON.
+
+    Compatible with gsrs.model Substance.to_embedding_chunks() output format.
+    """
+    __tablename__ = "substance_chunks"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid4()))
+
+    # Unique chunk identifier from gsrs.model (e.g., "root_uuid:12345678-...")
+    chunk_id: Mapped[str] = mapped_column(String(512), nullable=False, unique=True, index=True)
+
+    # Document ID (substance UUID)
+    document_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, index=True)
+
+    # Section name (e.g., "root", "names", "codes", "structure", "references")
+    section: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+
+    # Source URL/name (system-generated, from gsrs.model)
+    source_url: Mapped[Optional[str]] = mapped_column(String(256), nullable=True, index=True)
+
+    # The actual text content of the chunk
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Vector embedding
+    embedding: Mapped[List[float]] = mapped_column(Vector(), nullable=False)
+
+    # Metadata containing all element attributes from gsrs.model:
+    # - canonical_name: preferred substance name
+    # - chunk_type: type of chunk (overview, name, code, etc.)
+    # - hierarchy: parent context information
+    # - additional gsrs.model metadata fields
+    chunk_metadata: Mapped[Dict[str, Any]] = mapped_column("metadata", JSON, nullable=False, default=dict)
+
+    # Timestamps
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=sql_func.now())
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=sql_func.now(), onupdate=sql_func.now())
+
+    __table_args__ = (
+        Index('idx_document_id', 'document_id'),
+        Index('idx_section', 'section'),
+        Index('idx_source_url', 'source_url'),
+    )
+
+    def set_embedding(self, embedding: List[float]) -> None:
+        """Set the embedding vector."""
+        self.embedding = embedding
+
+    def __repr__(self):
+        return f"<VectorDocument(chunk_id={self.chunk_id}, section={self.section})>"
+
+
+class DBQueryResult:
+    """Represents a query result with similarity score."""
+    document: Any  # VectorDocument from app.models
+    score: float
+
+    def __init__(self, document: Any, score: float):
+        self.document = document
+        self.score = score
