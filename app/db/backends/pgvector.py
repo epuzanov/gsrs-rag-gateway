@@ -48,10 +48,12 @@ class PGVectorDatabase(VectorDatabase):
         if self.engine is None:
             raise ConnectionError("Failed to connect to the database.")
 
-        # Create tables
+        with self.engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            conn.commit()
+
         Base.metadata.create_all(bind=self.engine)
 
-        # Create HNSW index for faster vector similarity search
         if self.engine:
             with self.engine.connect() as conn:
                 conn.execute(text("""
@@ -77,7 +79,6 @@ class PGVectorDatabase(VectorDatabase):
 
         try:
             for doc in documents:
-                # Parse document_id UUID
                 try:
                     document_uuid = UUID(doc.document_id) if isinstance(doc.document_id, str) else doc.document_id
                 except (ValueError, AttributeError):
@@ -120,7 +121,6 @@ class PGVectorDatabase(VectorDatabase):
                 VectorDocument.embedding.cosine_distance(query_embedding).label('similarity')
             )
 
-            # Apply filters
             if filters:
                 if 'section' in filters:
                     query = query.filter(
