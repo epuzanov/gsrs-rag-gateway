@@ -6,6 +6,8 @@ Comprehensive documentation for the GSRS substance chunking service.
 
 The GSRS RAG Gateway automatically chunks GSRS (Global Substance Registration System) substance documents into meaningful, searchable units using the `gsrs.model` library. Each chunk preserves the substance context while focusing on specific elements or sections.
 
+API responses expose chunk metadata as `metadata`. The Python chunk object still uses `chunk_metadata` internally.
+
 ## Chunking Service
 
 The chunking is handled by the `ChunkerService` class, which uses the `Substance.to_embedding_chunks()` method from the `gsrs.model` library.
@@ -131,7 +133,7 @@ VectorDocument(
     chunk_id="root_protein_disulfideLinks_0_subunit1",
     document_id=UUID("12345678-1234-5678-1234-567812345678"),
     section="protein",
-    text="Disulfide Link: Subunit 1 Pos 220 ↔ Subunit 3 Pos 214",
+    text="Disulfide Link: Subunit 1 Pos 220 ? Subunit 3 Pos 214",
     chunk_metadata={
         "chunk_type": "disulfide_link",
         "subunit1_position": 220,
@@ -423,3 +425,4 @@ raw_chunks = gsrs_substance.to_embedding_chunks()
 - [API Reference](../api-reference.md) - API endpoints
 - [Vector Databases](../vector-databases.md) - Database backends
 - [Embedding Service](embedding.md) - Generating embeddings
+

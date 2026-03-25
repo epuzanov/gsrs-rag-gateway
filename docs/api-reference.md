@@ -198,7 +198,7 @@ Authorization: Basic <credentials>  # Optional but recommended
       "section": "codes",
       "text": "code: 50-78-2",
       "similarity_score": 0.892,
-      "chunk_metadata": {
+      "metadata": {
         "codeSystem": "CAS",
         "chunk_type": "code"
       }
@@ -267,7 +267,7 @@ GET /models
       "provider": "openai",
       "model": "text-embedding-3-small",
       "dimension": 1536,
-      "base_url": "https://api.openai.com/v1"
+      "url": "https://api.openai.com/v1/embeddings"
     }
   ],
   "current_model": "text-embedding-3-small"
@@ -536,7 +536,7 @@ interface VectorDocument {
   document_id: string;        // Substance UUID
   section: string;            // Section name (e.g., "codes", "names")
   text: string;               // Chunk text content
-  chunk_metadata: object;     // Additional metadata
+  metadata: object;           // Additional metadata
   source_url?: string;        // Optional source URL
 }
 ```
@@ -600,3 +600,7 @@ interface QueryResponse {
 - [Configuration](configuration.md)
 - [Authentication](authentication.md)
 - [Guides](guides/README.md)
+
+
+Note: the Python ORM still uses chunk_metadata internally, but API consumers should use metadata.
+

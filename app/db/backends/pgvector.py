@@ -79,19 +79,24 @@ class PGVectorDatabase(VectorDatabase):
 
         try:
             for doc in documents:
-                try:
-                    document_uuid = UUID(doc.document_id) if isinstance(doc.document_id, str) else doc.document_id
-                except (ValueError, AttributeError):
-                    document_uuid = UUID(int=0)
-
-                stmt = insert(VectorDocument).on_conflict_do_update(
-                    index_elements=['chunk_id'],
-                    set_=dict(
-                        text=doc.text,
-                        embedding=doc.embedding,
-                        chunk_metadata=doc.chunk_metadata,
-                        updated_at=text("CURRENT_TIMESTAMP")
-                    )
+                stmt = insert(doc).values(
+                    chunk_id=doc.chunk_id,
+                    document_id=doc.document_id,
+                    section=doc.section,
+                    source_url=doc.source_url,
+                    text=doc.text,
+                    embedding=doc.embedding,
+                    metadata=doc.chunk_metadata,
+                ).on_conflict_do_update(
+                    index_elements=[VectorDocument.chunk_id],
+                    set_={
+                        VectorDocument.section: doc.section,
+                        VectorDocument.source_url: doc.source_url,
+                        VectorDocument.text: doc.text,
+                        VectorDocument.embedding: doc.embedding,
+                        VectorDocument.chunk_metadata: doc.chunk_metadata,
+                        VectorDocument.updated_at: text("CURRENT_TIMESTAMP"),
+                    }
                 )
 
                 session.execute(stmt)
