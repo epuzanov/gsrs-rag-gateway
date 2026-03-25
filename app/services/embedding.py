@@ -4,8 +4,8 @@ GSRS RAG Gateway - OpenAI Embeddings Service
 Simple OpenAI-compatible embeddings service.
 """
 from typing import List
+
 import httpx
-from app.config import settings
 
 
 class EmbeddingService:
@@ -23,7 +23,8 @@ class EmbeddingService:
         api_key: str,
         model: str = "text-embedding-3-small",
         base_url: str = "https://api.openai.com/v1",
-        dimension: int = 1536
+        dimension: int = 1536,
+        verify_ssl: bool = True,
     ):
         """
         Initialize OpenAI embeddings service.
@@ -33,18 +34,20 @@ class EmbeddingService:
             model: Model name (default: text-embedding-3-small)
             base_url: API base URL (default: https://api.openai.com/v1)
             dimension: Embedding dimension (default: 1536)
+            verify_ssl: Whether to verify TLS certificates (default: True)
         """
         self.api_key = api_key
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.dimension = dimension
+        self.verify_ssl = verify_ssl
         self._client: httpx.Client | None = None
 
     @property
     def client(self) -> httpx.Client:
         """Get or create HTTP client."""
         if self._client is None:
-            self._client = httpx.Client(timeout=60.0)
+            self._client = httpx.Client(timeout=60.0, verify=self.verify_ssl)
         return self._client
 
     def embed(self, text: str) -> List[float]:
@@ -107,7 +110,8 @@ class EmbeddingService:
             "provider": "openai",
             "model": self.model,
             "dimension": self.dimension,
-            "base_url": self.base_url
+            "base_url": self.base_url,
+            "verify_ssl": self.verify_ssl,
         }
 
     def close(self):

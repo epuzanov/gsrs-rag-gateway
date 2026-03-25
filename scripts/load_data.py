@@ -19,17 +19,20 @@ Usage:
 
     # Dry run (parse only, don't upload)
     python scripts/load_data.py data/substances.gsrs --dry-run
+
+    # Disable TLS certificate validation for HTTPS endpoints
+    python scripts/load_data.py --all --insecure
 """
 
 import argparse
-import gzip
-import json
-import sys
-import httpx
-from pathlib import Path
-from typing import Generator, Dict, Any, List, Optional
-import logging
 import asyncio
+import gzip
+import httpx
+import json
+import logging
+import sys
+from pathlib import Path
+from typing import Any, Dict, Generator, List, Optional
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,6 +44,16 @@ logger = logging.getLogger(__name__)
 GSRS_BASE_URL = "https://gsrs.ncats.nih.gov/api/v1"
 GSRS_SEARCH_URL = f"{GSRS_BASE_URL}/substances/search"
 GSRS_SUBSTANCE_URL = f"{GSRS_BASE_URL}/substances"
+
+
+def create_client(timeout: float, verify_ssl: bool = True) -> httpx.Client:
+    """Create a sync HTTP client with optional certificate validation."""
+    return httpx.Client(timeout=timeout, verify=verify_ssl)
+
+
+def create_async_client(timeout: float, verify_ssl: bool = True) -> httpx.AsyncClient:
+    """Create an async HTTP client with optional certificate validation."""
+    return httpx.AsyncClient(timeout=timeout, verify=verify_ssl)
 
 
 def parse_gsrs_file(file_path: str) -> Generator[Dict[str, Any], None, None]:
@@ -173,7 +186,8 @@ async def load_substances_from_api(
     uuids: List[str],
     batch_size: int = 100,
     api_url: str = "http://localhost:8000",
-    dry_run: bool = False
+    dry_run: bool = False,
+    verify_ssl: bool = True,
 ) -> Dict[str, Any]:
     """
     Load substances from GSRS API and ingest to RAG Gateway.
@@ -183,6 +197,7 @@ async def load_substances_from_api(
         batch_size: Batch size for ingestion
         api_url: RAG Gateway API URL
         dry_run: If True, only download without uploading
+        verify_ssl: Whether to verify TLS certificates for HTTP requests
 
     Returns:
         Summary statistics
@@ -199,7 +214,7 @@ async def load_substances_from_api(
     # Download substances from GSRS
     logger.info(f"Downloading {len(uuids)} substances from GSRS API...")
 
-    async with httpx.AsyncClient(timeout=30.0) as session:
+    async with create_async_client(timeout=30.0, verify_ssl=verify_ssl) as session:
         tasks = [fetch_substance_by_uuid(uuid, session) for uuid in uuids]
         results = await asyncio.gather(*tasks)
 
@@ -215,7 +230,7 @@ async def load_substances_from_api(
 
     # Check API availability
     try:
-        with httpx.Client(timeout=10) as client:
+        with create_client(timeout=10, verify_ssl=verify_ssl) as client:
             health_response = client.get(f"{api_url}/health")
             health_response.raise_for_status()
             health = health_response.json()
@@ -231,7 +246,7 @@ async def load_substances_from_api(
         batch.append(substance)
 
         if len(batch) >= batch_size:
-            result = ingest_batch(batch, api_url)
+            result = ingest_batch(batch, api_url, verify_ssl=verify_ssl)
             stats["successful"] += result.get("successful", 0)
             stats["failed"] += result.get("failed", 0)
             stats["total_chunks"] += result.get("total_chunks", 0)
@@ -244,7 +259,7 @@ async def load_substances_from_api(
 
     # Process remaining
     if batch:
-        result = ingest_batch(batch, api_url)
+        result = ingest_batch(batch, api_url, verify_ssl=verify_ssl)
         stats["successful"] += result.get("successful", 0)
         stats["failed"] += result.get("failed", 0)
         stats["total_chunks"] += result.get("total_chunks", 0)
@@ -256,7 +271,8 @@ async def load_substances_from_api(
 def ingest_batch(
     substances: List[Dict[str, Any]],
     api_url: str,
-    timeout: int = 300
+    timeout: int = 300,
+    verify_ssl: bool = True,
 ) -> Dict[str, Any]:
     """
     Load substances to the RAG Gateway API.
@@ -265,6 +281,7 @@ def ingest_batch(
         substances: List of substance documents
         api_url: Base URL of the RAG Gateway API
         timeout: Request timeout in seconds
+        verify_ssl: Whether to verify TLS certificates for HTTP requests
 
     Returns:
         Response from the API
@@ -272,7 +289,7 @@ def ingest_batch(
     endpoint = f"{api_url}/ingest/batch"
 
     try:
-        with httpx.Client(timeout=timeout) as client:
+        with create_client(timeout=timeout, verify_ssl=verify_ssl) as client:
             response = client.post(endpoint, json={"substances": substances})
             response.raise_for_status()
             return response.json()
@@ -289,7 +306,8 @@ def load_from_file(
     file_path: str,
     batch_size: int = 100,
     api_url: str = "http://localhost:8000",
-    dry_run: bool = False
+    dry_run: bool = False,
+    verify_ssl: bool = True,
 ) -> Dict[str, Any]:
     """
     Load substances from a .gsrs file.
@@ -299,6 +317,7 @@ def load_from_file(
         batch_size: Batch size for ingestion
         api_url: RAG Gateway API URL
         dry_run: If True, only parse without uploading
+        verify_ssl: Whether to verify TLS certificates for HTTP requests
 
     Returns:
         Summary statistics
@@ -314,7 +333,7 @@ def load_from_file(
     # Check API availability if not dry run
     if not dry_run:
         try:
-            with httpx.Client(timeout=10) as client:
+            with create_client(timeout=10, verify_ssl=verify_ssl) as client:
                 health_response = client.get(f"{api_url}/health")
                 health_response.raise_for_status()
                 health = health_response.json()
@@ -343,7 +362,7 @@ def load_from_file(
                 logger.info(f"[DRY RUN] Would process batch of {len(batch)} substances")
                 stats["successful"] += len(batch)
             else:
-                result = ingest_batch(batch, api_url)
+                result = ingest_batch(batch, api_url, verify_ssl=verify_ssl)
                 stats["successful"] += result.get("successful", 0)
                 stats["failed"] += result.get("failed", 0)
                 stats["total_chunks"] += result.get("total_chunks", 0)
@@ -363,7 +382,7 @@ def load_from_file(
             logger.info(f"[DRY RUN] Would process final batch of {len(batch)} substances")
             stats["successful"] += len(batch)
         else:
-            result = ingest_batch(batch, api_url)
+            result = ingest_batch(batch, api_url, verify_ssl=verify_ssl)
             stats["successful"] += result.get("successful", 0)
             stats["failed"] += result.get("failed", 0)
             stats["total_chunks"] += result.get("total_chunks", 0)
@@ -443,8 +462,14 @@ def main():
         default=10000,
         help="Maximum number of substances to fetch when using --all (default: 10000)"
     )
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        help="Disable TLS certificate validation for GSRS and RAG Gateway HTTPS requests"
+    )
 
     args = parser.parse_args()
+    verify_ssl = not args.insecure
 
     # Validate input
     if args.file:
@@ -460,7 +485,8 @@ def main():
             args.file,
             batch_size=args.batch_size,
             api_url=args.api_url,
-            dry_run=args.dry_run
+            dry_run=args.dry_run,
+            verify_ssl=verify_ssl,
         )
     elif args.uuids:
         # Load specific UUIDs from API
@@ -474,14 +500,15 @@ def main():
             uuid_list,
             batch_size=args.batch_size,
             api_url=args.api_url,
-            dry_run=args.dry_run
+            dry_run=args.dry_run,
+            verify_ssl=verify_ssl,
         ))
     elif args.all:
         # Load all substances from API
         logger.info(f"Fetching all substance UUIDs from GSRS API (max: {args.max_results})...")
 
         async def fetch_and_load():
-            async with httpx.AsyncClient(timeout=30.0) as session:
+            async with create_async_client(timeout=30.0, verify_ssl=verify_ssl) as session:
                 uuids = await fetch_all_substance_uuids(session, args.max_results)
 
             if not uuids:
@@ -499,7 +526,8 @@ def main():
                 uuids,
                 batch_size=args.batch_size,
                 api_url=args.api_url,
-                dry_run=args.dry_run
+                dry_run=args.dry_run,
+                verify_ssl=verify_ssl,
             )
 
         stats = asyncio.run(fetch_and_load())
@@ -514,6 +542,9 @@ def main():
         print()
         print("  # Load all substances from GSRS server")
         print("  python scripts/load_data.py --all")
+        print()
+        print("  # Disable TLS certificate validation")
+        print("  python scripts/load_data.py --all --insecure")
         sys.exit(1)
 
     print_summary(stats)

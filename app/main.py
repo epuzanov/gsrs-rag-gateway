@@ -48,7 +48,8 @@ embedding_service = EmbeddingService(
     api_key=settings.embedding_api_key,
     model=settings.embedding_model,
     base_url=settings.embedding_base_url,
-    dimension=settings.embedding_dimension
+    dimension=settings.embedding_dimension,
+    verify_ssl=settings.embedding_verify_ssl,
 )
 chunker = ChunkerService()
 
@@ -253,7 +254,7 @@ async def eri_query(request: ERIQueryRequest):
         # Transform to ERI format
         eri_results = [
             ERIResult(
-                id=str(chunk.section),
+                id=str(chunk.chunk_id),
                 text=str(chunk.text),
                 score=score,
                 metadata={

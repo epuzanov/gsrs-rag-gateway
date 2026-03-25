@@ -3,17 +3,20 @@ GSRS RAG Gateway - Data Loader Script Tests
 
 Tests for the load_data.py script functionality.
 """
-import pytest
 import gzip
 import json
-import tempfile
 import os
-from pathlib import Path
+import tempfile
+
+import pytest
+
 from scripts.load_data import (
-    parse_gsrs_file,
-    fetch_substance_by_uuid,
     fetch_all_substance_uuids,
-    ingest_batch
+    fetch_substance_by_uuid,
+    ingest_batch,
+    load_from_file,
+    load_substances_from_api,
+    parse_gsrs_file,
 )
 
 
@@ -47,8 +50,8 @@ class TestParseGsrsFile:
             temp_path = f.name
             with gzip.open(f, 'wt', encoding='utf-8') as gz:
                 gz.write('\t\t{"uuid": "uuid-1"}\n')
-                gz.write('\t\t\n')  # Empty line with tabs
-                gz.write('\n')  # Empty line
+                gz.write('\t\t\n')
+                gz.write('\n')
                 gz.write('\t\t{"uuid": "uuid-2"}\n')
 
         try:
@@ -63,12 +66,11 @@ class TestParseGsrsFile:
             temp_path = f.name
             with gzip.open(f, 'wt', encoding='utf-8') as gz:
                 gz.write('\t\t{"uuid": "uuid-1"}\n')
-                gz.write('\t\t{invalid json}\n')  # Invalid JSON
+                gz.write('\t\t{invalid json}\n')
                 gz.write('\t\t{"uuid": "uuid-2"}\n')
 
         try:
             parsed = list(parse_gsrs_file(temp_path))
-            # Should skip invalid lines
             assert len(parsed) == 2
         finally:
             os.unlink(temp_path)
@@ -78,7 +80,7 @@ class TestParseGsrsFile:
         with tempfile.NamedTemporaryFile(suffix=".gsrs", delete=False) as f:
             temp_path = f.name
             with gzip.open(f, 'wt', encoding='utf-8') as gz:
-                gz.write('\t{"uuid": "uuid-1"}\n')  # Single tab
+                gz.write('\t{"uuid": "uuid-1"}\n')
 
         try:
             parsed = list(parse_gsrs_file(temp_path))
@@ -100,6 +102,95 @@ class TestIngestBatch:
         assert result["failed"] == 1
         assert len(result["errors"]) > 0
 
+    def test_ingest_batch_disables_certificate_validation(self, monkeypatch):
+        """Test ingestion can disable TLS certificate validation."""
+        seen = {}
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"successful": 1, "failed": 0, "total_chunks": 1, "errors": []}
+
+        class FakeClient:
+            def __init__(self, *, timeout, verify):
+                seen["timeout"] = timeout
+                seen["verify"] = verify
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def post(self, endpoint, json):
+                seen["endpoint"] = endpoint
+                return FakeResponse()
+
+        monkeypatch.setattr("scripts.load_data.httpx.Client", FakeClient)
+
+        result = ingest_batch([{"uuid": "test-uuid"}], "https://gateway.example", verify_ssl=False)
+
+        assert result["successful"] == 1
+        assert seen["verify"] is False
+        assert seen["endpoint"] == "https://gateway.example/ingest/batch"
+
+    def test_load_from_file_disables_certificate_validation(self, monkeypatch):
+        """Test file loading passes disabled TLS verification to health and ingest calls."""
+        seen = {"verify": []}
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"status": "healthy", "database_connected": True}
+
+        class FakeClient:
+            def __init__(self, *, timeout, verify):
+                seen["verify"].append(verify)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def get(self, url):
+                seen["health_url"] = url
+                return FakeResponse()
+
+        monkeypatch.setattr("scripts.load_data.httpx.Client", FakeClient)
+
+        captured = {}
+
+        def fake_ingest_batch(substances, api_url, timeout=300, verify_ssl=True):
+            captured["verify_ssl"] = verify_ssl
+            return {"successful": len(substances), "failed": 0, "total_chunks": 2, "errors": []}
+
+        monkeypatch.setattr("scripts.load_data.ingest_batch", fake_ingest_batch)
+
+        with tempfile.NamedTemporaryFile(suffix=".gsrs", delete=False) as f:
+            temp_path = f.name
+            with gzip.open(f, 'wt', encoding='utf-8') as gz:
+                gz.write('\t\t{"uuid": "uuid-1"}\n')
+
+        try:
+            result = load_from_file(
+                temp_path,
+                batch_size=1,
+                api_url="https://gateway.example",
+                verify_ssl=False,
+            )
+        finally:
+            os.unlink(temp_path)
+
+        assert result["successful"] == 1
+        assert seen["verify"] == [False]
+        assert captured["verify_ssl"] is False
+        assert seen["health_url"] == "https://gateway.example/health"
+
 
 class TestFetchSubstanceByUuid:
     """Tests for fetching substances from GSRS API."""
@@ -109,8 +200,7 @@ class TestFetchSubstanceByUuid:
         """Test fetching a valid substance from GSRS API."""
         import httpx
 
-        # Known valid UUID from GSRS
-        test_uuid = "0103a288-6eb6-4ced-b13a-849cd7edf028"  # Ibuprofen
+        test_uuid = "0103a288-6eb6-4ced-b13a-849cd7edf028"
 
         async with httpx.AsyncClient(timeout=30.0) as session:
             substance = await fetch_substance_by_uuid(test_uuid, session)
@@ -137,8 +227,8 @@ class TestFetchSubstanceByUuid:
         import httpx
 
         test_uuids = [
-            "0103a288-6eb6-4ced-b13a-849cd7edf028",  # Ibuprofen
-            "80edf0eb-b6c5-4a9a-adde-28c7254046d9",  # Chemical
+            "0103a288-6eb6-4ced-b13a-849cd7edf028",
+            "80edf0eb-b6c5-4a9a-adde-28c7254046d9",
         ]
 
         async with httpx.AsyncClient(timeout=30.0) as session:
@@ -180,3 +270,80 @@ class TestFetchAllSubstanceUuids:
 
         for uuid in uuids:
             assert uuid_pattern.match(uuid), f"Invalid UUID format: {uuid}"
+
+    @pytest.mark.asyncio
+    async def test_load_substances_from_api_disables_certificate_validation(self, monkeypatch):
+        """Test API loading passes disabled TLS verification to both async and sync clients."""
+        seen = {"async_verify": [], "sync_verify": []}
+
+        class FakeAsyncResponse:
+            def __init__(self, payload, status_code=200):
+                self._payload = payload
+                self.status_code = status_code
+
+            def json(self):
+                return self._payload
+
+        class FakeAsyncClient:
+            def __init__(self, *, timeout, verify):
+                seen["async_verify"].append(verify)
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def get(self, url, timeout=30.0, params=None):
+                substance_uuid = url.split("(")[-1].split(")")[0]
+                return FakeAsyncResponse({"uuid": substance_uuid})
+
+        class FakeSyncResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"status": "healthy"}
+
+        class FakeSyncClient:
+            def __init__(self, *, timeout, verify):
+                seen["sync_verify"].append(verify)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def get(self, url):
+                seen["health_url"] = url
+                return FakeSyncResponse()
+
+        monkeypatch.setattr("scripts.load_data.httpx.AsyncClient", FakeAsyncClient)
+        monkeypatch.setattr("scripts.load_data.httpx.Client", FakeSyncClient)
+
+        captured = {}
+
+        def fake_ingest_batch(substances, api_url, timeout=300, verify_ssl=True):
+            captured["verify_ssl"] = verify_ssl
+            return {
+                "successful": len(substances),
+                "failed": 0,
+                "total_chunks": len(substances),
+                "errors": [],
+            }
+
+        monkeypatch.setattr("scripts.load_data.ingest_batch", fake_ingest_batch)
+
+        result = await load_substances_from_api(
+            ["uuid-1", "uuid-2"],
+            batch_size=2,
+            api_url="https://gateway.example",
+            verify_ssl=False,
+        )
+
+        assert result["downloaded"] == 2
+        assert result["successful"] == 2
+        assert seen["async_verify"] == [False]
+        assert seen["sync_verify"] == [False]
+        assert captured["verify_ssl"] is False
