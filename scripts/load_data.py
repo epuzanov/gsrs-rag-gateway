@@ -479,6 +479,7 @@ def main():
             sys.exit(1)
 
     # Run appropriate loader
+    loop = asyncio.get_event_loop()
     if args.file:
         # Load from file
         stats = load_from_file(
@@ -496,7 +497,7 @@ def main():
             sys.exit(1)
 
         logger.info(f"Loading {len(uuid_list)} substances from GSRS API...")
-        stats = asyncio.run(load_substances_from_api(
+        stats = loop.run_until_complete(load_substances_from_api(
             uuid_list,
             batch_size=args.batch_size,
             api_url=args.api_url,
@@ -530,7 +531,7 @@ def main():
                 verify_ssl=verify_ssl,
             )
 
-        stats = asyncio.run(fetch_and_load())
+        stats = loop.run_until_complete(fetch_and_load())
     else:
         parser.print_help()
         print("\nExamples:")
