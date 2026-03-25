@@ -24,11 +24,11 @@ class Settings(BaseSettings):
     # Database URL
     # PostgreSQL: postgresql://user:pass@host:port/dbname
     # ChromaDB: chroma://./chroma_data/substance_chunks
-    database_url: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/gsrs_rag")
+    database_url: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/substance_chunks")
 
     # Embedding API Configuration
     embedding_api_key: str = os.getenv("EMBEDDING_API_KEY", "")
-    embedding_base_url: str = os.getenv("EMBEDDING_BASE_URL", "https://api.openai.com/v1")
+    embedding_url: str = os.getenv("EMBEDDING_URL", "https://api.openai.com/v1/embeddings")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
     embedding_dimension: int = int(os.getenv("EMBEDDING_DIMENSION", "1536"))
     embedding_verify_ssl: bool = _get_bool_env("EMBEDDING_VERIFY_SSL", True)

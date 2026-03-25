@@ -47,7 +47,7 @@ vector_db = VectorDatabaseService()
 embedding_service = EmbeddingService(
     api_key=settings.embedding_api_key,
     model=settings.embedding_model,
-    base_url=settings.embedding_base_url,
+    url=settings.embedding_url,
     dimension=settings.embedding_dimension,
     verify_ssl=settings.embedding_verify_ssl,
 )
@@ -115,17 +115,14 @@ async def ingest_substance(request: IngestRequest, username: str = Depends(verif
     Requires authentication.
     """
     try:
-        # Chunk the substance
         chunks = chunker.chunk_substance(request.substance)
 
         if not chunks:
             raise HTTPException(status_code=400, detail="No chunks generated from substance")
 
-        # Generate embeddings
         texts = [str(chunk.text) for chunk in chunks]
         embeddings = embedding_service.embed_batch(texts)
 
-        # Store in database
         count = vector_db.upsert_chunks(chunks, embeddings)
 
         substance_uuid = request.substance.get("uuid", "unknown")
@@ -194,10 +191,8 @@ async def query(request: QueryRequest):
     Returns the most relevant chunks based on vector similarity.
     """
     try:
-        # Generate query embedding
         query_embedding = embedding_service.embed(request.query)
 
-        # Search database
         results = vector_db.similarity_search(
             query_embedding=query_embedding,
             top_k=request.top_k,
@@ -233,25 +228,16 @@ async def eri_query(request: ERIQueryRequest):
 
     This endpoint follows the ERI protocol for external retrieval systems,
     providing a standardized interface for RAG applications.
-
-    Args:
-        request: ERI query request with query text and optional filters
-
-    Returns:
-        ERI-formatted response with results
     """
     try:
-        # Generate query embedding
         query_embedding = embedding_service.embed(request.query)
 
-        # Search database
         results = vector_db.similarity_search(
             query_embedding=query_embedding,
             top_k=request.top_k,
             filters=request.filters
         )
 
-        # Transform to ERI format
         eri_results = [
             ERIResult(
                 id=str(chunk.chunk_id),
@@ -295,8 +281,6 @@ async def delete_substance(substance_uuid: UUID, username: str = Depends(verify_
 
 @app.get("/models", response_model=AvailableModelsResponse, tags=["Configuration"])
 async def get_available_models():
-    """Get information about the current embedding model."""
-    # Return current model info as a single-item dict for compatibility
     current = embedding_service.get_model_info()
     return AvailableModelsResponse(
         models={"current": current},
@@ -306,13 +290,11 @@ async def get_available_models():
 
 @app.get("/models/current", response_model=ModelInfo, tags=["Configuration"])
 async def get_current_model():
-    """Get information about the current embedding model."""
     return embedding_service.get_model_info()
 
 
 @app.get("/statistics", tags=["Management"])
 async def get_statistics():
-    """Get database statistics."""
     return vector_db.get_statistics()
 
 
