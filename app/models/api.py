@@ -1,7 +1,7 @@
 """
 GSRS RAG Gateway - API Schemas
 """
-from pydantic import BaseModel, Field, ConfigDict, AliasChoices
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 
 
@@ -26,17 +26,11 @@ class QueryRequest(BaseModel):
 
 class QueryResult(BaseModel):
     """A single query result."""
-    model_config = ConfigDict(populate_by_name=True)
-
     element_path: str
     substance_uuid: str
     text: str
     similarity_score: float
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict,
-        validation_alias=AliasChoices("metadata", "chunk_metadata"),
-        serialization_alias="metadata",
-    )
+    metadata: Dict[str, Any]
 
 
 class QueryResponse(BaseModel):
@@ -76,6 +70,7 @@ class HealthResponse(BaseModel):
     statistics: Dict[str, int]
 
 
+# ERI (External Retrieval Interface) Schemas
 class ERIQueryRequest(BaseModel):
     """ERI query request schema."""
     query: str = Field(..., description="Search query text")
@@ -85,17 +80,10 @@ class ERIQueryRequest(BaseModel):
 
 class ERIResult(BaseModel):
     """A single ERI result."""
-    model_config = ConfigDict(populate_by_name=True)
-
     id: str = Field(..., description="Unique result identifier")
     text: str = Field(..., description="Result text content")
     score: float = Field(..., description="Similarity score")
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Result metadata",
-        validation_alias=AliasChoices("metadata", "chunk_metadata"),
-        serialization_alias="metadata",
-    )
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Result metadata")
 
 
 class ERIQueryResponse(BaseModel):
