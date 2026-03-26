@@ -57,6 +57,11 @@ class PGVectorDatabase(VectorDatabase):
         if self.engine:
             with self.engine.connect() as conn:
                 conn.execute(text("""
+                    ALTER TABLE substance_chunks
+                    ALTER COLUMN embedding
+                    TYPE Vector(%s);
+                """%dimension))
+                conn.execute(text("""
                     CREATE INDEX IF NOT EXISTS idx_embedding_hnsw
                     ON substance_chunks
                     USING hnsw (embedding vector_cosine_ops)
@@ -79,19 +84,11 @@ class PGVectorDatabase(VectorDatabase):
 
         try:
             for doc in documents:
-                try:
-                    document_uuid = UUID(doc.document_id) if isinstance(doc.document_id, str) else doc.document_id
-                except (ValueError, AttributeError):
-                    document_uuid = UUID(int=0)
-
-                stmt = insert(VectorDocument).on_conflict_do_update(
-                    index_elements=['chunk_id'],
-                    set_=dict(
-                        text=doc.text,
-                        embedding=doc.embedding,
-                        chunk_metadata=doc.chunk_metadata,
-                        updated_at=text("CURRENT_TIMESTAMP")
-                    )
+                stmt = insert(VectorDocument).values(
+                    chunk_id = doc.chunk_id,
+                    **doc.values()
+                ).on_conflict_do_update(
+                    set_ = doc.values()
                 )
 
                 session.execute(stmt)

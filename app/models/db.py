@@ -49,7 +49,7 @@ class VectorDocument(Base):
     # - chunk_type: type of chunk (overview, name, code, etc.)
     # - hierarchy: parent context information
     # - additional gsrs.model metadata fields
-    chunk_metadata: Mapped[Dict[str, Any]] = mapped_column("metadata", JSON, nullable=False, default=dict)
+    chunk_metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     # Timestamps
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=sql_func.now())
@@ -60,6 +60,16 @@ class VectorDocument(Base):
         Index('idx_section', 'section'),
         Index('idx_source_url', 'source_url'),
     )
+
+    def values(self):
+        return {
+            "document_id": self.document_id,
+            "section": self.section,
+            "source_url": self.source_url,
+            "text": self.text,
+            "embedding": self.embedding,
+            "chunk_metadata": self.chunk_metadata,
+        }
 
     def set_embedding(self, embedding: List[float]) -> None:
         """Set the embedding vector."""
