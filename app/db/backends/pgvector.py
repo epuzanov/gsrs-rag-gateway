@@ -88,6 +88,7 @@ class PGVectorDatabase(VectorDatabase):
                     chunk_id = doc.chunk_id,
                     **doc.values()
                 ).on_conflict_do_update(
+                    index_elements=[VectorDocument.chunk_id],
                     set_ = doc.values()
                 )
 
@@ -236,3 +237,4 @@ class PGVectorDatabase(VectorDatabase):
             return []
         finally:
             session.close()
+

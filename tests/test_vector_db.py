@@ -265,6 +265,43 @@ class TestPGVectorDatabase(unittest.TestCase):
         create_all.assert_called_once_with(bind=engine)
         self.assertEqual(conn.commit.call_count, 2)
 
+    def test_upsert_documents_targets_unique_chunk_id(self):
+        from app.db.backends.pgvector import PGVectorDatabase
+
+        db = PGVectorDatabase("postgresql://test:test@localhost/test")
+        session = MagicMock()
+        db._get_session = MagicMock(return_value=session)
+
+        doc = VectorDocument(
+            chunk_id="root_update_code",
+            document_id=uuid4(),
+            section="codes",
+            text="Updated text",
+            embedding=[0.1, 0.2, 0.3],
+            chunk_metadata={"version": 2},
+            source_url="test"
+        )
+
+        insert_stmt = MagicMock()
+        values_stmt = MagicMock()
+        upsert_stmt = MagicMock()
+        insert_stmt.values.return_value = values_stmt
+        values_stmt.on_conflict_do_update.return_value = upsert_stmt
+
+        with patch("app.db.backends.pgvector.insert", return_value=insert_stmt) as insert_factory:
+            count = db.upsert_documents([doc])
+
+        insert_factory.assert_called_once_with(VectorDocument)
+        insert_stmt.values.assert_called_once_with(chunk_id=doc.chunk_id, **doc.values())
+        values_stmt.on_conflict_do_update.assert_called_once_with(
+            index_elements=[VectorDocument.chunk_id],
+            set_=doc.values(),
+        )
+        session.execute.assert_called_once_with(upsert_stmt)
+        session.commit.assert_called_once()
+        session.close.assert_called_once()
+        self.assertEqual(count, 1)
+
 
 class TestVectorDocument(unittest.TestCase):
     """Unit tests for VectorDocument dataclass."""
@@ -323,3 +360,4 @@ class TestQueryResult(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
