@@ -205,7 +205,7 @@ async def query(request: QueryRequest):
                 substance_uuid=str(chunk.document_id),
                 text=str(chunk.text),
                 similarity_score=score,
-                metadata={k: str(v) for k, v in chunk.chunk_metadata.items()} if chunk.chunk_metadata else {}
+                metadata={k: v for k, v in chunk.chunk_metadata.items()} if chunk.chunk_metadata else {}
             )
             for chunk, score in results
         ]
@@ -247,7 +247,7 @@ async def eri_query(request: ERIQueryRequest):
                     "section": str(chunk.section),
                     "document_id": str(chunk.document_id),
                     "source_url": str(chunk.source_url),
-                    **({k: str(v) for k, v in chunk.chunk_metadata.items()} if chunk.chunk_metadata else {})
+                    **({k: v for k, v in chunk.chunk_metadata.items()} if chunk.chunk_metadata else {})
                 }
             )
             for chunk, score in results

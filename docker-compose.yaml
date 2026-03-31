@@ -6,11 +6,11 @@ services:
     image: pgvector/pgvector:pg18
     container_name: gsrs-postgres
     environment:
-      POSTGRES_USER: gsrs
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gsrs_secure_password_change_me}
-      POSTGRES_DB: gsrs_rag
+      POSTGRES_DB: substance_chunks
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     ports:
       - "5432:5432"
     healthcheck:

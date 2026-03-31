@@ -51,6 +51,7 @@ class ChunkerService:
         # Convert gsrs.model chunks to our Chunk format
         chunks = []
         for gsrs_chunk in gsrs_chunks:
+            gsrs_chunk['chunk_metadata'] = gsrs_chunk.pop('metadata', {})
             chunk = VectorDocument(**gsrs_chunk)
             chunks.append(chunk)
         return chunks
