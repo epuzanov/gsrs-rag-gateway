@@ -57,7 +57,11 @@ class EmbeddingService:
         return headers
 
     def _build_payload(self, input_data: str | List[str]) -> dict[str, Any]:
-        payload: dict[str, Any] = {"model": self.model, "input": input_data}
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "dimensions": self.dimension,
+            "input": input_data,
+        }
         if self.url.endswith("/embeddings"):
             payload["encoding_format"] = "float"
         return payload
