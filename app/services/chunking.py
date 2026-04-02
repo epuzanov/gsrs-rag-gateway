@@ -17,6 +17,7 @@ import json
 from typing import Dict, List, Any
 
 from gsrs.model import Substance
+from gsrs.utils import SubstanceChunker
 from app.models import VectorDocument
 
 
@@ -30,7 +31,7 @@ class ChunkerService:
     """
 
     def __init__(self):
-        pass
+        self._chunker = SubstanceChunker()
 
     def chunk_substance(self, substance: Dict[str, Any]) -> List[VectorDocument]:
         """
@@ -46,7 +47,7 @@ class ChunkerService:
         gsrs_substance = Substance.model_validate(substance)
 
         # Get embedding chunks from gsrs.model
-        gsrs_chunks: List[Dict[str, Any]] = gsrs_substance.to_embedding_chunks()
+        gsrs_chunks: List[Dict[str, Any]] = self._chunker.chunk(gsrs_substance)
 
         # Convert gsrs.model chunks to our Chunk format
         chunks = []

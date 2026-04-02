@@ -63,7 +63,7 @@ class TestChunkerService:
         assert all(isinstance(c, VectorDocument) for c in chunks)
 
         # Check for root chunk
-        root_chunks = [c for c in chunks if c.section == 'root']
+        root_chunks = [c for c in chunks if c.section == 'summary']
         assert len(root_chunks) > 0
         assert "Aspirin" in root_chunks[0].text
 
@@ -142,7 +142,7 @@ class TestChunkerService:
         assert all(isinstance(c, VectorDocument) for c in chunks)
 
         # Check for root chunk
-        root_chunks = [c for c in chunks if c.section == 'root']
+        root_chunks = [c for c in chunks if c.section == 'summary']
         assert len(root_chunks) > 0
         assert "Test Concept" in root_chunks[0].text
 
