@@ -4,19 +4,23 @@ GSRS RAG Gateway - FastAPI Application
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import ValidationError
+from gsrs.model import Substance
+from gsrs.services.ai import SubstanceChunker
 from uuid import UUID
 import logging
 import secrets
 
 from app.config import settings
-from app.services import VectorDatabaseService, ChunkerService, EmbeddingService
+from app.services import VectorDatabaseService, EmbeddingService
 from app.models import (
     IngestRequest, IngestResponse,
     QueryRequest, QueryResponse, QueryResult,
     BatchIngestRequest, BatchIngestResponse,
     ModelInfo, HealthResponse,
     DeleteResponse, AvailableModelsResponse,
-    ERIQueryRequest, ERIQueryResponse, ERIResult
+    ERIQueryRequest, ERIQueryResponse, ERIResult,
+    VectorDocument
  )
 
 # Configure logging
@@ -51,7 +55,11 @@ embedding_service = EmbeddingService(
     dimension=settings.embedding_dimension,
     verify_ssl=settings.embedding_verify_ssl,
 )
-chunker = ChunkerService()
+chunker = SubstanceChunker(
+    class_=VectorDocument,
+    identifiers_order=settings.chunker_identifiers_order,
+    classifications_order=settings.chunker_classifications_order,
+)
 
 # Basic authentication
 security = HTTPBasic()
@@ -115,7 +123,8 @@ async def ingest_substance(request: IngestRequest, username: str = Depends(verif
     Requires authentication.
     """
     try:
-        chunks = chunker.chunk_substance(request.substance)
+        substance_model = Substance.model_validate(request.substance)
+        chunks = chunker.chunk(substance_model)
 
         if not chunks:
             raise HTTPException(status_code=400, detail="No chunks generated from substance")
@@ -125,7 +134,7 @@ async def ingest_substance(request: IngestRequest, username: str = Depends(verif
 
         count = vector_db.upsert_chunks(chunks, embeddings)
 
-        substance_uuid = request.substance.get("uuid", "unknown")
+        substance_uuid = str(getattr(substance_model, "uuid", "unknown"))
         sections = [str(chunk.section) for chunk in chunks]
 
         logger.info(f"Ingested substance {substance_uuid}: {count} chunks")
@@ -136,6 +145,8 @@ async def ingest_substance(request: IngestRequest, username: str = Depends(verif
             element_paths=sections
         )
 
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors())
     except HTTPException:
         raise
     except Exception as e:
@@ -157,7 +168,8 @@ async def ingest_batch(request: BatchIngestRequest, username: str = Depends(veri
 
     for idx, substance in enumerate(request.substances):
         try:
-            chunks = chunker.chunk_substance(substance)
+            substance_model = Substance.model_validate(substance)
+            chunks = chunker.chunk(substance_model)
 
             if chunks:
                 texts = [str(chunk.text) for chunk in chunks]
@@ -169,6 +181,10 @@ async def ingest_batch(request: BatchIngestRequest, username: str = Depends(veri
                 failed += 1
                 errors.append(f"Substance {idx}: No chunks generated")
 
+        except ValidationError as e:
+            failed += 1
+            errors.append(f"Substance {idx}: Invalid substance payload")
+            logger.error(f"Batch ingestion validation failed for substance {idx}: {e}")
         except Exception as e:
             failed += 1
             errors.append(f"Substance {idx}: {str(e)}")
@@ -199,16 +215,7 @@ async def query(request: QueryRequest):
             filters=request.filters
         )
 
-        query_results = [
-            QueryResult(
-                element_path=str(chunk.section),
-                substance_uuid=str(chunk.document_id),
-                text=str(chunk.text),
-                similarity_score=score,
-                metadata={k: v for k, v in chunk.chunk_metadata.items()} if chunk.chunk_metadata else {}
-            )
-            for chunk, score in results
-        ]
+        query_results = [QueryResult(chunk, score) for chunk, score in results]
 
         return QueryResponse(
             query=request.query,
@@ -238,20 +245,7 @@ async def eri_query(request: ERIQueryRequest):
             filters=request.filters
         )
 
-        eri_results = [
-            ERIResult(
-                id=str(chunk.chunk_id),
-                text=str(chunk.text),
-                score=score,
-                metadata={
-                    "section": str(chunk.section),
-                    "document_id": str(chunk.document_id),
-                    "source_url": str(chunk.source_url),
-                    **({k: v for k, v in chunk.chunk_metadata.items()} if chunk.chunk_metadata else {})
-                }
-            )
-            for chunk, score in results
-        ]
+        eri_results = [ERIResult(chunk, score) for chunk, score in results]
 
         return ERIQueryResponse(results=eri_results)
 

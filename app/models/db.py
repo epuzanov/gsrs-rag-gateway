@@ -20,9 +20,10 @@ class VectorDocument(Base):
     Represents a chunk of a GSRS Substance document.
     Each chunk corresponds to a specific section in the substance JSON.
 
-    Compatible with gsrs.model Substance.to_embedding_chunks() output format.
+    Compatible with gsrs.services.ai SubstanceChunker(class_=VectorDocument).chunks(substance)
+    output format.
     """
-    __tablename__ = "substance_chunks"
+    __tablename__ = "chunks"
 
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid4()))
 
@@ -49,7 +50,7 @@ class VectorDocument(Base):
     # - chunk_type: type of chunk (overview, name, code, etc.)
     # - hierarchy: parent context information
     # - additional gsrs.model metadata fields
-    chunk_metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[Dict[str, Any]] = mapped_column("metadata", JSON, nullable=False, default=dict)
 
     # Timestamps
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=sql_func.now())
@@ -61,6 +62,12 @@ class VectorDocument(Base):
         Index('idx_source_url', 'source_url'),
     )
 
+    def __init__(self, *args: Any, **kwargs: Any):
+        """Accept `metadata` constructor input and store it in `metadata_json`."""
+        if "metadata" in kwargs:
+            kwargs["metadata_json"] = kwargs.pop("metadata")
+        super().__init__(*args, **kwargs)
+
     def values(self):
         return {
             "document_id": self.document_id,
@@ -68,7 +75,7 @@ class VectorDocument(Base):
             "source_url": self.source_url,
             "text": self.text,
             "embedding": self.embedding,
-            "chunk_metadata": self.chunk_metadata,
+            "metadata_json": self.metadata_json,
         }
 
     def set_embedding(self, embedding: List[float]) -> None:
@@ -87,3 +94,4 @@ class DBQueryResult:
     def __init__(self, document: Any, score: float):
         self.document = document
         self.score = score
+

@@ -128,7 +128,7 @@ EMBEDDING_MODEL=nomic-embed-text
 EMBEDDING_DIMENSION=768
 
 # Database (ChromaDB for local development)
-DATABASE_URL=chroma://./chroma_data/substance_chunks
+DATABASE_URL=chroma://./chroma_data/chunks
 
 # Authentication (for ERI)
 API_USERNAME=admin
@@ -610,7 +610,7 @@ fi
 # 3. Create .env
 echo "Creating .env file..."
 cat > .env << EOF
-DATABASE_URL=chroma://./chroma_data/substance_chunks
+DATABASE_URL=chroma://./chroma_data/chunks
 EMBEDDING_API_KEY=ollama
 EMBEDDING_BASE_URL=http://host.docker.internal:11434/v1
 EMBEDDING_MODEL=${EMBEDDING_MODEL}

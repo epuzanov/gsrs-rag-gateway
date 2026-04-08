@@ -6,9 +6,10 @@ Tests for the load_data.py script functionality.
 import gzip
 import json
 import os
+import re
 import tempfile
-
-import pytest
+import unittest
+from unittest.mock import patch
 
 from scripts.load_data import (
     fetch_all_substance_uuids,
@@ -20,27 +21,27 @@ from scripts.load_data import (
 )
 
 
-class TestParseGsrsFile:
+class TestParseGsrsFile(unittest.TestCase):
     """Tests for .gsrs file parsing."""
 
     def test_parse_gsrs_file_basic(self):
         """Test parsing basic .gsrs file."""
         substances = [
             {"uuid": "uuid-1", "substanceClass": "chemical"},
-            {"uuid": "uuid-2", "substanceClass": "protein"}
+            {"uuid": "uuid-2", "substanceClass": "protein"},
         ]
 
         with tempfile.NamedTemporaryFile(suffix=".gsrs", delete=False) as f:
             temp_path = f.name
-            with gzip.open(f, 'wt', encoding='utf-8') as gz:
+            with gzip.open(f, "wt", encoding="utf-8") as gz:
                 for sub in substances:
-                    gz.write('\t\t' + json.dumps(sub) + '\n')
+                    gz.write("\t\t" + json.dumps(sub) + "\n")
 
         try:
             parsed = list(parse_gsrs_file(temp_path))
-            assert len(parsed) == 2
-            assert parsed[0]["uuid"] == "uuid-1"
-            assert parsed[1]["uuid"] == "uuid-2"
+            self.assertEqual(len(parsed), 2)
+            self.assertEqual(parsed[0]["uuid"], "uuid-1")
+            self.assertEqual(parsed[1]["uuid"], "uuid-2")
         finally:
             os.unlink(temp_path)
 
@@ -48,15 +49,15 @@ class TestParseGsrsFile:
         """Test parsing .gsrs file with empty lines."""
         with tempfile.NamedTemporaryFile(suffix=".gsrs", delete=False) as f:
             temp_path = f.name
-            with gzip.open(f, 'wt', encoding='utf-8') as gz:
-                gz.write('\t\t{"uuid": "uuid-1"}\n')
-                gz.write('\t\t\n')
-                gz.write('\n')
-                gz.write('\t\t{"uuid": "uuid-2"}\n')
+            with gzip.open(f, "wt", encoding="utf-8") as gz:
+                gz.write("\t\t{\"uuid\": \"uuid-1\"}\n")
+                gz.write("\t\t\n")
+                gz.write("\n")
+                gz.write("\t\t{\"uuid\": \"uuid-2\"}\n")
 
         try:
             parsed = list(parse_gsrs_file(temp_path))
-            assert len(parsed) == 2
+            self.assertEqual(len(parsed), 2)
         finally:
             os.unlink(temp_path)
 
@@ -64,14 +65,14 @@ class TestParseGsrsFile:
         """Test parsing .gsrs file with invalid JSON lines."""
         with tempfile.NamedTemporaryFile(suffix=".gsrs", delete=False) as f:
             temp_path = f.name
-            with gzip.open(f, 'wt', encoding='utf-8') as gz:
-                gz.write('\t\t{"uuid": "uuid-1"}\n')
-                gz.write('\t\t{invalid json}\n')
-                gz.write('\t\t{"uuid": "uuid-2"}\n')
+            with gzip.open(f, "wt", encoding="utf-8") as gz:
+                gz.write("\t\t{\"uuid\": \"uuid-1\"}\n")
+                gz.write("\t\t{invalid json}\n")
+                gz.write("\t\t{\"uuid\": \"uuid-2\"}\n")
 
         try:
             parsed = list(parse_gsrs_file(temp_path))
-            assert len(parsed) == 2
+            self.assertEqual(len(parsed), 2)
         finally:
             os.unlink(temp_path)
 
@@ -79,18 +80,18 @@ class TestParseGsrsFile:
         """Test parsing .gsrs file with single leading tab."""
         with tempfile.NamedTemporaryFile(suffix=".gsrs", delete=False) as f:
             temp_path = f.name
-            with gzip.open(f, 'wt', encoding='utf-8') as gz:
-                gz.write('\t{"uuid": "uuid-1"}\n')
+            with gzip.open(f, "wt", encoding="utf-8") as gz:
+                gz.write("\t{\"uuid\": \"uuid-1\"}\n")
 
         try:
             parsed = list(parse_gsrs_file(temp_path))
-            assert len(parsed) == 1
-            assert parsed[0]["uuid"] == "uuid-1"
+            self.assertEqual(len(parsed), 1)
+            self.assertEqual(parsed[0]["uuid"], "uuid-1")
         finally:
             os.unlink(temp_path)
 
 
-class TestIngestBatch:
+class TestIngestBatch(unittest.TestCase):
     """Tests for batch ingestion."""
 
     def test_ingest_batch_api_error(self):
@@ -98,11 +99,11 @@ class TestIngestBatch:
         substances = [{"uuid": "test-uuid"}]
         result = ingest_batch(substances, "http://invalid-url-12345:9999")
 
-        assert result["successful"] == 0
-        assert result["failed"] == 1
-        assert len(result["errors"]) > 0
+        self.assertEqual(result["successful"], 0)
+        self.assertEqual(result["failed"], 1)
+        self.assertGreater(len(result["errors"]), 0)
 
-    def test_ingest_batch_disables_certificate_validation(self, monkeypatch):
+    def test_ingest_batch_disables_certificate_validation(self):
         """Test ingestion can disable TLS certificate validation."""
         seen = {}
 
@@ -128,15 +129,14 @@ class TestIngestBatch:
                 seen["endpoint"] = endpoint
                 return FakeResponse()
 
-        monkeypatch.setattr("scripts.load_data.httpx.Client", FakeClient)
+        with patch("scripts.load_data.httpx.Client", FakeClient):
+            result = ingest_batch([{"uuid": "test-uuid"}], "https://gateway.example", verify_ssl=False)
 
-        result = ingest_batch([{"uuid": "test-uuid"}], "https://gateway.example", verify_ssl=False)
+        self.assertEqual(result["successful"], 1)
+        self.assertFalse(seen["verify"])
+        self.assertEqual(seen["endpoint"], "https://gateway.example/ingest/batch")
 
-        assert result["successful"] == 1
-        assert seen["verify"] is False
-        assert seen["endpoint"] == "https://gateway.example/ingest/batch"
-
-    def test_load_from_file_disables_certificate_validation(self, monkeypatch):
+    def test_load_from_file_disables_certificate_validation(self):
         """Test file loading passes disabled TLS verification to health and ingest calls."""
         seen = {"verify": []}
 
@@ -161,118 +161,170 @@ class TestIngestBatch:
                 seen["health_url"] = url
                 return FakeResponse()
 
-        monkeypatch.setattr("scripts.load_data.httpx.Client", FakeClient)
-
         captured = {}
 
         def fake_ingest_batch(substances, api_url, timeout=300, verify_ssl=True):
             captured["verify_ssl"] = verify_ssl
             return {"successful": len(substances), "failed": 0, "total_chunks": 2, "errors": []}
 
-        monkeypatch.setattr("scripts.load_data.ingest_batch", fake_ingest_batch)
+        with patch("scripts.load_data.httpx.Client", FakeClient), patch(
+            "scripts.load_data.ingest_batch", fake_ingest_batch
+        ):
+            with tempfile.NamedTemporaryFile(suffix=".gsrs", delete=False) as f:
+                temp_path = f.name
+                with gzip.open(f, "wt", encoding="utf-8") as gz:
+                    gz.write("\t\t{\"uuid\": \"uuid-1\"}\n")
 
-        with tempfile.NamedTemporaryFile(suffix=".gsrs", delete=False) as f:
-            temp_path = f.name
-            with gzip.open(f, 'wt', encoding='utf-8') as gz:
-                gz.write('\t\t{"uuid": "uuid-1"}\n')
+            try:
+                result = load_from_file(
+                    temp_path,
+                    batch_size=1,
+                    api_url="https://gateway.example",
+                    verify_ssl=False,
+                )
+            finally:
+                os.unlink(temp_path)
 
-        try:
-            result = load_from_file(
-                temp_path,
-                batch_size=1,
-                api_url="https://gateway.example",
-                verify_ssl=False,
-            )
-        finally:
-            os.unlink(temp_path)
-
-        assert result["successful"] == 1
-        assert seen["verify"] == [False]
-        assert captured["verify_ssl"] is False
-        assert seen["health_url"] == "https://gateway.example/health"
+        self.assertEqual(result["successful"], 1)
+        self.assertEqual(seen["verify"], [False])
+        self.assertFalse(captured["verify_ssl"])
+        self.assertEqual(seen["health_url"], "https://gateway.example/health")
 
 
-class TestFetchSubstanceByUuid:
+class TestFetchSubstanceByUuid(unittest.IsolatedAsyncioTestCase):
     """Tests for fetching substances from GSRS API."""
 
-    @pytest.mark.asyncio
     async def test_fetch_valid_substance(self):
         """Test fetching a valid substance from GSRS API."""
-        import httpx
-
         test_uuid = "0103a288-6eb6-4ced-b13a-849cd7edf028"
 
-        async with httpx.AsyncClient(timeout=30.0) as session:
-            substance = await fetch_substance_by_uuid(test_uuid, session)
+        class FakeResponse:
+            status_code = 200
 
-        assert substance is not None
-        assert substance["uuid"] == test_uuid
-        assert substance["substanceClass"] == "chemical"
+            @staticmethod
+            def json():
+                return {"uuid": test_uuid, "substanceClass": "chemical"}
 
-    @pytest.mark.asyncio
+        class FakeSession:
+            async def get(self, url, timeout=30.0):
+                self.last_url = url
+                return FakeResponse()
+
+        session = FakeSession()
+        substance = await fetch_substance_by_uuid(test_uuid, session)
+
+        self.assertIsNotNone(substance)
+        if substance is not None:
+            self.assertEqual(substance["uuid"], test_uuid)
+            self.assertEqual(substance["substanceClass"], "chemical")
+
     async def test_fetch_invalid_substance(self):
         """Test fetching an invalid substance UUID."""
-        import httpx
-
         invalid_uuid = "00000000-0000-0000-0000-000000000000"
 
-        async with httpx.AsyncClient(timeout=30.0) as session:
-            substance = await fetch_substance_by_uuid(invalid_uuid, session)
+        class FakeResponse:
+            status_code = 404
 
-        assert substance is None
+            @staticmethod
+            def json():
+                return {}
 
-    @pytest.mark.asyncio
+        class FakeSession:
+            async def get(self, url, timeout=30.0):
+                return FakeResponse()
+
+        session = FakeSession()
+        substance = await fetch_substance_by_uuid(invalid_uuid, session)
+
+        self.assertIsNone(substance)
+
     async def test_fetch_multiple_substances_parallel(self):
         """Test fetching multiple substances in parallel."""
-        import httpx
+        import asyncio
 
         test_uuids = [
             "0103a288-6eb6-4ced-b13a-849cd7edf028",
             "80edf0eb-b6c5-4a9a-adde-28c7254046d9",
         ]
 
-        async with httpx.AsyncClient(timeout=30.0) as session:
-            import asyncio
-            tasks = [fetch_substance_by_uuid(uuid, session) for uuid in test_uuids]
-            results = await asyncio.gather(*tasks)
+        class FakeResponse:
+            def __init__(self, payload, status_code=200):
+                self._payload = payload
+                self.status_code = status_code
+
+            def json(self):
+                return self._payload
+
+        class FakeSession:
+            async def get(self, url, timeout=30.0):
+                substance_uuid = url.split("(")[-1].split(")")[0]
+                return FakeResponse({"uuid": substance_uuid})
+
+        session = FakeSession()
+        tasks = [fetch_substance_by_uuid(uuid, session) for uuid in test_uuids]
+        results = await asyncio.gather(*tasks)
 
         valid_results = [r for r in results if r is not None]
-        assert len(valid_results) == 2
+        self.assertEqual(len(valid_results), 2)
 
 
-class TestFetchAllSubstanceUuids:
+class TestFetchAllSubstanceUuids(unittest.IsolatedAsyncioTestCase):
     """Tests for fetching all substance UUIDs."""
 
-    @pytest.mark.asyncio
     async def test_fetch_uuids_limited(self):
         """Test fetching limited number of UUIDs."""
-        import httpx
 
-        async with httpx.AsyncClient(timeout=30.0) as session:
-            uuids = await fetch_all_substance_uuids(session, max_results=10)
+        class FakeResponse:
+            status_code = 200
 
-        assert len(uuids) <= 10
-        assert all(isinstance(u, str) for u in uuids)
+            @staticmethod
+            def json():
+                return {
+                    "results": [
+                        {"uuid": "00000000-0000-0000-0000-000000000001"},
+                        {"uuid": "00000000-0000-0000-0000-000000000002"},
+                        {"uuid": "00000000-0000-0000-0000-000000000003"},
+                    ]
+                }
 
-    @pytest.mark.asyncio
+        class FakeSession:
+            async def get(self, url, params=None, timeout=30.0):
+                return FakeResponse()
+
+        uuids = await fetch_all_substance_uuids(FakeSession(), max_results=10)
+
+        self.assertLessEqual(len(uuids), 10)
+        self.assertTrue(all(isinstance(u, str) for u in uuids))
+
     async def test_fetch_uuids_format(self):
         """Test that fetched UUIDs have correct format."""
-        import httpx
-        import re
-
         uuid_pattern = re.compile(
-            r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
-            re.IGNORECASE
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            re.IGNORECASE,
         )
 
-        async with httpx.AsyncClient(timeout=30.0) as session:
-            uuids = await fetch_all_substance_uuids(session, max_results=5)
+        class FakeResponse:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return {
+                    "results": [
+                        {"uuid": "0103a288-6eb6-4ced-b13a-849cd7edf028"},
+                        {"uuid": "80edf0eb-b6c5-4a9a-adde-28c7254046d9"},
+                    ]
+                }
+
+        class FakeSession:
+            async def get(self, url, params=None, timeout=30.0):
+                return FakeResponse()
+
+        uuids = await fetch_all_substance_uuids(FakeSession(), max_results=5)
 
         for uuid in uuids:
-            assert uuid_pattern.match(uuid), f"Invalid UUID format: {uuid}"
+            self.assertRegex(uuid, uuid_pattern)
 
-    @pytest.mark.asyncio
-    async def test_load_substances_from_api_disables_certificate_validation(self, monkeypatch):
+    async def test_load_substances_from_api_disables_certificate_validation(self):
         """Test API loading passes disabled TLS verification to both async and sync clients."""
         seen = {"async_verify": [], "sync_verify": []}
 
@@ -319,9 +371,6 @@ class TestFetchAllSubstanceUuids:
                 seen["health_url"] = url
                 return FakeSyncResponse()
 
-        monkeypatch.setattr("scripts.load_data.httpx.AsyncClient", FakeAsyncClient)
-        monkeypatch.setattr("scripts.load_data.httpx.Client", FakeSyncClient)
-
         captured = {}
 
         def fake_ingest_batch(substances, api_url, timeout=300, verify_ssl=True):
@@ -333,17 +382,22 @@ class TestFetchAllSubstanceUuids:
                 "errors": [],
             }
 
-        monkeypatch.setattr("scripts.load_data.ingest_batch", fake_ingest_batch)
+        with patch("scripts.load_data.httpx.AsyncClient", FakeAsyncClient), patch(
+            "scripts.load_data.httpx.Client", FakeSyncClient
+        ), patch("scripts.load_data.ingest_batch", fake_ingest_batch):
+            result = await load_substances_from_api(
+                ["uuid-1", "uuid-2"],
+                batch_size=2,
+                api_url="https://gateway.example",
+                verify_ssl=False,
+            )
 
-        result = await load_substances_from_api(
-            ["uuid-1", "uuid-2"],
-            batch_size=2,
-            api_url="https://gateway.example",
-            verify_ssl=False,
-        )
+        self.assertEqual(result["downloaded"], 2)
+        self.assertEqual(result["successful"], 2)
+        self.assertEqual(seen["async_verify"], [False])
+        self.assertEqual(seen["sync_verify"], [False])
+        self.assertFalse(captured["verify_ssl"])
 
-        assert result["downloaded"] == 2
-        assert result["successful"] == 2
-        assert seen["async_verify"] == [False]
-        assert seen["sync_verify"] == [False]
-        assert captured["verify_ssl"] is False
+
+if __name__ == "__main__":
+    unittest.main()

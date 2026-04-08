@@ -4,21 +4,28 @@ Comprehensive documentation for the GSRS substance chunking service.
 
 ## Overview
 
-The GSRS RAG Gateway automatically chunks GSRS (Global Substance Registration System) substance documents into meaningful, searchable units using the `gsrs.model` library. Each chunk preserves the substance context while focusing on specific elements or sections.
+The GSRS RAG Gateway automatically chunks GSRS (Global Substance Registration System) substance documents into meaningful, searchable units using `gsrs.services.ai.SubstanceChunker`. Each chunk preserves the substance context while focusing on specific elements or sections.
 
 ## Chunking Service
 
-The chunking is handled by the `ChunkerService` class, which uses the `Substance.to_embedding_chunks()` method from the `gsrs.model` library.
+The chunking is handled by `gsrs.services.ai.SubstanceChunker`, configured with `class_=VectorDocument` so chunk results are emitted as `VectorDocument` instances.
 
 ```python
-from app.services.chunking import ChunkerService
+from gsrs.model import Substance
+from gsrs.services.ai import SubstanceChunker
+from app.config import settings
+from app.models import VectorDocument
 
-# Initialize chunker
-chunker = ChunkerService()
+# Initialize chunker with configured ordering preferences
+chunker = SubstanceChunker(
+    class_=VectorDocument,
+    identifiers_order=settings.chunker_identifiers_order,
+    classifications_order=settings.chunker_classifications_order,
+)
 
-# Chunk a substance document
-substance = {...}  # GSRS substance JSON
-chunks = chunker.chunk_substance(substance)
+# Validate JSON payload into gsrs.model before chunking
+substance = Substance.model_validate({...})
+chunks = chunker.chunk(substance)
 ```
 
 ## VectorDocument Structure
@@ -35,7 +42,7 @@ class VectorDocument:
     section: str                     # Section name (e.g., "names", "codes", "structure")
     text: str                        # Text content for embeddings
     embedding: List[float]           # Vector embedding (set by EmbeddingService)
-    chunk_metadata: Dict[str, Any]   # Additional metadata (chunk_type, attributes, etc.)
+    metadata_json: Dict[str, Any]   # Additional metadata (chunk_type, attributes, etc.)
     source_url: Optional[str] = None # Optional source URL
 ```
 
@@ -48,7 +55,7 @@ class VectorDocument:
 | `section` | str | The section type (e.g., "names", "codes", "structure", "protein") |
 | `text` | str | The actual text content for embedding generation |
 | `embedding` | List[float] | Vector embedding (populated by EmbeddingService) |
-| `chunk_metadata` | Dict[str, Any] | Additional metadata including chunk_type, attributes, etc. |
+| `metadata_json` | Dict[str, Any] | Additional metadata including chunk_type, attributes, etc. |
 | `source_url` | Optional[str] | Optional source URL or reference |
 
 ## Substance Classes
@@ -91,7 +98,7 @@ VectorDocument(
     document_id=UUID("12345678-1234-5678-1234-567812345678"),
     section="structure",
     text="SMILES: CC(C)Cc1ccc(cc1)C(C)C(=O)O",
-    chunk_metadata={
+    metadata_json={
         "chunk_type": "structure_smiles",
         "smiles": "CC(C)Cc1ccc(cc1)C(C)C(=O)O"
     }
@@ -103,7 +110,7 @@ VectorDocument(
     document_id=UUID("12345678-1234-5678-1234-567812345678"),
     section="moieties",
     text="Molecular Formula: C13H18O2",
-    chunk_metadata={
+    metadata_json={
         "chunk_type": "moiety_formula",
         "moiety_index": 0
     }
@@ -119,7 +126,7 @@ VectorDocument(
     document_id=UUID("12345678-1234-5678-1234-567812345678"),
     section="protein",
     text="Protein Subunit 1: Heavy Chain | Sequence: QVQLVQSGAEVKKPG...",
-    chunk_metadata={
+    metadata_json={
         "chunk_type": "protein_subunit_sequence",
         "subunit_index": 0,
         "sequence_length": 446
@@ -131,8 +138,8 @@ VectorDocument(
     chunk_id="root_protein_disulfideLinks_0_subunit1",
     document_id=UUID("12345678-1234-5678-1234-567812345678"),
     section="protein",
-    text="Disulfide Link: Subunit 1 Pos 220 ↔ Subunit 3 Pos 214",
-    chunk_metadata={
+    text="Disulfide Link: Subunit 1 Pos 220 <-> Subunit 3 Pos 214",
+    metadata_json={
         "chunk_type": "disulfide_link",
         "subunit1_position": 220,
         "subunit3_position": 214
@@ -149,7 +156,7 @@ VectorDocument(
     document_id=UUID("12345678-1234-5678-1234-567812345678"),
     section="nucleicAcid",
     text="Nucleic Acid Subunit 1: Length: 21 | Sequence: ACCUCACCAAGGCCAGCACUU",
-    chunk_metadata={
+    metadata_json={
         "chunk_type": "nucleic_acid_subunit_sequence",
         "subunit_index": 0,
         "sequence_length": 21
@@ -166,7 +173,7 @@ VectorDocument(
     document_id=UUID("12345678-1234-5678-1234-567812345678"),
     section="polymer",
     text="Polymer Monomer: Propylene | Mole Ratio: 100",
-    chunk_metadata={
+    metadata_json={
         "chunk_type": "polymer_monomer",
         "monomer_index": 0
     }
@@ -182,7 +189,7 @@ VectorDocument(
     document_id=UUID("12345678-1234-5678-1234-567812345678"),
     section="mixture",
     text="Mixture Component 1: ZUCLOMIPHENE CITRATE | Strength: 30-50%",
-    chunk_metadata={
+    metadata_json={
         "chunk_type": "mixture_component",
         "component_index": 0
     }
@@ -215,20 +222,27 @@ root_<section>_<index>_<field>
 ### Basic Usage
 
 ```python
-from app.services.chunking import ChunkerService
+from gsrs.model import Substance
+from gsrs.services.ai import SubstanceChunker
+from app.config import settings
+from app.models import VectorDocument
 
 # Initialize chunker
-chunker = ChunkerService()
+chunker = SubstanceChunker(
+    class_=VectorDocument,
+    identifiers_order=settings.chunker_identifiers_order,
+    classifications_order=settings.chunker_classifications_order,
+)
 
-# Chunk a substance document
-substance = {
+# Validate and chunk a substance document
+substance_json = {
     "uuid": "12345678-1234-5678-1234-567812345678",
     "substanceClass": "chemical",
     "names": [{"name": "Aspirin", "type": "COMMON"}],
     "codes": [{"code": "50-78-2", "codeSystem": "CAS"}]
 }
-
-chunks = chunker.chunk_substance(substance)
+substance = Substance.model_validate(substance_json)
+chunks = chunker.chunk(substance)
 
 # Process chunks
 for chunk in chunks:
@@ -238,26 +252,36 @@ for chunk in chunks:
 ### From JSON String
 
 ```python
-from app.services.chunking import chunk_substance_json
+import json
+from gsrs.model import Substance
+from gsrs.services.ai import SubstanceChunker
+from app.models import VectorDocument
 
 json_str = '{"uuid": "...", "substanceClass": "chemical", ...}'
-chunks = chunk_substance_json(json_str)
+substance_json = json.loads(json_str)
+substance = Substance.model_validate(substance_json)
+
+chunker = SubstanceChunker(class_=VectorDocument)
+chunks = chunker.chunk(substance)
 ```
 
 ### With Embeddings
 
 ```python
-from app.services.chunking import ChunkerService
+from gsrs.model import Substance
+from gsrs.services.ai import SubstanceChunker
+from app.models import VectorDocument
 from app.services.embedding import EmbeddingService
 from app.services.vector_database import VectorDatabaseService
 
-chunker = ChunkerService()
+chunker = SubstanceChunker(class_=VectorDocument)
 embedding_service = EmbeddingService(api_key="...")
 db_service = VectorDatabaseService(database_url="...")
 
 # Chunk substance
-substance = {...}
-chunks = chunker.chunk_substance(substance)
+substance_json = {...}
+substance = Substance.model_validate(substance_json)
+chunks = chunker.chunk(substance)
 
 # Generate embeddings
 texts = [chunk.text for chunk in chunks]
@@ -272,14 +296,14 @@ db_service.upsert_chunks(chunks, embeddings)
 ```python
 for chunk in chunks:
     # Access chunk metadata
-    chunk_type = chunk.chunk_metadata.get("chunk_type")
+    chunk_type = chunk.metadata_json.get("chunk_type")
     
     # Filter by section
     if chunk.section == "codes":
         print(f"Code: {chunk.text}")
     
     # Filter by chunk_type
-    if chunk.chunk_metadata.get("chunk_type") == "names":
+    if chunk.metadata_json.get("chunk_type") == "names":
         print(f"Name: {chunk.text}")
 ```
 
@@ -289,20 +313,19 @@ The chunking service has comprehensive test coverage:
 
 ```bash
 # Run chunking tests
-python -m pytest tests/test_chunking.py -v
+python -m unittest tests.test_chunking
 
 # Run specific test class
-python -m pytest tests/test_chunking.py::TestChunkerService -v
+python -m unittest tests.test_chunking.TestChunkerService
 ```
 
 ### Test Coverage
 
 | Test Class | Tests | Description |
 |------------|-------|-------------|
-| `TestChunkerService` | 6 | ChunkerService functionality |
-| `test_chunker_initialization` | 1 | Service initialization |
+| `TestChunkerService` | 5 | SubstanceChunker functionality |
+| `test_chunker_initialization` | 1 | Chunker initialization |
 | `test_chemical_substance_chunking` | 1 | Chemical substance chunking |
-| `test_chunk_substance_json` | 1 | JSON string convenience function |
 | `test_concept_substance_chunking` | 1 | Concept substance class |
 | `test_names_chunking` | 1 | Names section chunking |
 | `test_codes_chunking` | 1 | Codes section chunking |
@@ -318,19 +341,19 @@ The `gsrs.model` library creates appropriately sized chunks:
 
 ### 2. Metadata Usage
 
-Use `chunk_metadata` for filtering and faceted search:
+Use `metadata_json` for filtering and faceted search:
 
 ```python
 # Filter by chunk_type
-name_chunks = [c for c in chunks if c.chunk_metadata.get("chunk_type") == "name"]
+name_chunks = [c for c in chunks if c.metadata_json.get("chunk_type") == "name"]
 
 # Filter by section
 code_chunks = [c for c in chunks if c.section == "codes"]
 
 # Access specific metadata
 for chunk in chunks:
-    if "sequence_length" in chunk.chunk_metadata:
-        print(f"Sequence length: {chunk.chunk_metadata['sequence_length']}")
+    if "sequence_length" in chunk.metadata_json:
+        print(f"Sequence length: {chunk.metadata_json['sequence_length']}")
 ```
 
 ### 3. Embedding Generation
@@ -381,7 +404,9 @@ from gsrs.model import Substance
 
 try:
     gsrs_substance = Substance.model_validate(substance)
-    chunks = gsrs_substance.to_embedding_chunks()
+    from gsrs.services.ai import SubstanceChunker
+    from app.models import VectorDocument
+    chunks = SubstanceChunker(class_=VectorDocument).chunk(gsrs_substance)
 except ValidationError as e:
     print(f"Invalid substance: {e}")
 ```
@@ -392,29 +417,31 @@ Some chunks may have empty metadata:
 
 ```python
 for chunk in chunks:
-    metadata = chunk.chunk_metadata or {}
+    metadata = chunk.metadata_json or {}
     chunk_type = metadata.get("chunk_type", "unknown")
 ```
 
-## Integration with gsrs.model
+## Integration with GSRS Libraries
 
-The chunking service relies on the `gsrs.model` library:
+The chunking workflow uses both `gsrs.model` (validation/model types) and `gsrs.services.ai` (chunk generation):
 
 ```python
 from gsrs.model import Substance
+from gsrs.services.ai import SubstanceChunker
+from app.models import VectorDocument
 
 # Parse substance
 gsrs_substance = Substance.model_validate(substance_json)
 
 # Get embedding-ready chunks
-raw_chunks = gsrs_substance.to_embedding_chunks()
+chunks = SubstanceChunker(class_=VectorDocument).chunk(gsrs_substance)
 
-# Each raw chunk is a dict with:
+# Each chunk is a VectorDocument with:
 # - chunk_id: str
 # - document_id: UUID
 # - section: str
 # - text: str
-# - metadata: Dict[str, Any]
+# - metadata_json: Dict[str, Any]
 ```
 
 ## Related Documentation
@@ -423,3 +450,5 @@ raw_chunks = gsrs_substance.to_embedding_chunks()
 - [API Reference](../api-reference.md) - API endpoints
 - [Vector Databases](../vector-databases.md) - Database backends
 - [Embedding Service](embedding.md) - Generating embeddings
+
+

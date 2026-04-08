@@ -4,6 +4,7 @@ GSRS RAG Gateway - Unit Tests for Vector Database Backends
 import os
 import shutil
 import tempfile
+import time
 import unittest
 from uuid import uuid4
 from unittest.mock import MagicMock, patch
@@ -37,7 +38,7 @@ class TestChromaDatabase(unittest.TestCase):
                 section="codes",
                 text=f"Test chunk text {i}",
                 embedding=[float(i + 1)] * self.test_dimension,
-                chunk_metadata={"test": f"value_{i}"},
+                metadata_json={"test": f"value_{i}"},
                 source_url="test_source"
             )
             for i in range(5)
@@ -51,7 +52,14 @@ class TestChromaDatabase(unittest.TestCase):
             pass
         self.db.disconnect()
         if os.path.exists(self.test_dir):
-            shutil.rmtree(self.test_dir)
+            for _ in range(10):
+                try:
+                    shutil.rmtree(self.test_dir)
+                    break
+                except PermissionError:
+                    time.sleep(0.1)
+            else:
+                shutil.rmtree(self.test_dir, ignore_errors=True)
 
     def test_upsert_documents(self):
         """Test inserting documents."""
@@ -87,7 +95,7 @@ class TestChromaDatabase(unittest.TestCase):
                 section="root",
                 text=f"Substance chunk {i}",
                 embedding=[0.1] * self.test_dimension,
-                chunk_metadata={},
+                metadata_json={},
                 source_url="test"
             )
             for i in range(3)
@@ -136,7 +144,7 @@ class TestChromaDatabase(unittest.TestCase):
                 section="root",
                 text=f"To delete {i}",
                 embedding=[0.1] * self.test_dimension,
-                chunk_metadata={},
+                metadata_json={},
                 source_url="test"
             )
             for i in range(3)
@@ -261,7 +269,7 @@ class TestPGVectorDatabase(unittest.TestCase):
 
         executed_sql = [call.args[0].text.strip() for call in conn.execute.call_args_list]
         self.assertEqual(executed_sql[0], "CREATE EXTENSION IF NOT EXISTS vector;")
-        self.assertIn("CREATE INDEX IF NOT EXISTS idx_embedding_hnsw", executed_sql[1])
+        self.assertTrue(any("CREATE INDEX IF NOT EXISTS idx_embedding_hnsw" in sql for sql in executed_sql))
         create_all.assert_called_once_with(bind=engine)
         self.assertEqual(conn.commit.call_count, 2)
 
@@ -278,7 +286,7 @@ class TestPGVectorDatabase(unittest.TestCase):
             section="codes",
             text="Updated text",
             embedding=[0.1, 0.2, 0.3],
-            chunk_metadata={"version": 2},
+            metadata_json={"version": 2},
             source_url="test"
         )
 
@@ -321,6 +329,7 @@ class TestVectorDocument(unittest.TestCase):
         self.assertEqual(doc.chunk_id, "root_code")
         self.assertEqual(doc.text, "Test text")
         self.assertEqual(len(doc.embedding), 3)
+        self.assertEqual(doc.metadata_json, {"key": "value"})
 
     def test_document_repr(self):
         """Test VectorDocument string representation."""
@@ -330,7 +339,7 @@ class TestVectorDocument(unittest.TestCase):
             section="codes",
             text="Test",
             embedding=[],
-            chunk_metadata={},
+            metadata_json={},
             source_url="test"
         )
 
@@ -348,7 +357,7 @@ class TestQueryResult(unittest.TestCase):
             section="codes",
             text="Test",
             embedding=[],
-            chunk_metadata={},
+            metadata_json={},
             source_url="test"
         )
 
@@ -360,4 +369,5 @@ class TestQueryResult(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 

@@ -324,10 +324,10 @@ uvicorn app.main:app --reload
 echo $DATABASE_URL
 
 # For ChromaDB (default)
-DATABASE_URL=chroma://./chroma_data/substance_chunks
+DATABASE_URL=chroma://./chroma_data/chunks
 
 # For PostgreSQL
-DATABASE_URL=postgresql://user:pass@localhost:5432/substance_chunks
+DATABASE_URL=postgresql://user:pass@localhost:5432/gsrs_rag
 ```
 
 ### No Chunks Created

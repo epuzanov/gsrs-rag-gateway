@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gsrs_secure_password_change_me}
-      POSTGRES_DB: substance_chunks
+      POSTGRES_DB: gsrs_rag
     volumes:
       - postgres_data:/var/lib/postgresql
     ports:
@@ -31,11 +31,11 @@ services:
     environment:
       # Database URL - scheme determines backend automatically:
       # - PostgreSQL: postgresql://user:pass@host:port/dbname
-      # - ChromaDB: chroma://./chroma_data/substance_chunks
+      # - ChromaDB: chroma://./chroma_data/chunks
       # For PostgreSQL (production):
-      DATABASE_URL: ${DATABASE_URL:-postgresql://gsrs:${POSTGRES_PASSWORD:-gsrs_secure_password_change_me}@postgres:5432/substance_chunks}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:${POSTGRES_PASSWORD:-gsrs_secure_password_change_me}@postgres:5432/gsrs_rag}
       # For ChromaDB (development - uncomment to use):
-      # DATABASE_URL: chroma://./chroma_data/substance_chunks
+      # DATABASE_URL: chroma://./chroma_data/chunks
       # Embedding API Configuration
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
       EMBEDDING_URL: ${EMBEDDING_URL:-https://api.openai.com/v1/embeddings}

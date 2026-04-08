@@ -32,7 +32,7 @@ class ChromaDatabase(VectorDatabase):
     Ideal for development and testing.
     """
 
-    def __init__(self, database_url: str = "chroma://./chroma_data/substance_chunks"):
+    def __init__(self, database_url: str = "chroma://./chroma_data/chunks"):
         if not CHROMA_AVAILABLE:
             raise ImportError(
                 "ChromaDB is not installed. Install with: pip install chromadb"
@@ -51,7 +51,7 @@ class ChromaDatabase(VectorDatabase):
             self.persist_directory, self.collection_name = path.rsplit("/", 1)
         else:
             self.persist_directory = path or "./chroma_data"
-            self.collection_name = "substance_chunks"
+            self.collection_name = "chunks"
 
         self.client: Optional["ClientAPI"] = None
         self.collection: Optional["Collection"] = None
@@ -69,8 +69,26 @@ class ChromaDatabase(VectorDatabase):
     
     def disconnect(self) -> None:
         """Close ChromaDB connection."""
-        self.client = None
+        client = self.client
         self.collection = None
+        self.client = None
+
+        if client is None:
+            return
+
+        close_method = getattr(client, "close", None)
+        if callable(close_method):
+            try:
+                close_method()
+            except Exception:
+                pass
+
+        clear_cache = getattr(client, "clear_system_cache", None)
+        if callable(clear_cache):
+            try:
+                clear_cache()
+            except Exception:
+                pass
     
     def initialize(self, dimension: int = 384) -> None:
         """Create or get the collection."""
@@ -110,7 +128,7 @@ class ChromaDatabase(VectorDatabase):
                 "chunk_id": doc.chunk_id,
                 "section": doc.section,
                 "source_url": doc.source_url or "",
-                "metadata_json": json.dumps(doc.chunk_metadata)
+                "metadata_json": json.dumps(doc.metadata_json)
             })
             documents_list.append(doc.text)
 
@@ -182,7 +200,7 @@ class ChromaDatabase(VectorDatabase):
                     source_url=metadata.get('source_url', ''),
                     text=results['documents'][0][i] if results['documents'] else '',
                     embedding=embedding,
-                    chunk_metadata=metadata_json
+                    metadata_json=metadata_json
                 )
 
                 # Chroma returns distance, convert to similarity score
@@ -231,7 +249,7 @@ class ChromaDatabase(VectorDatabase):
             source_url=metadata.get('source_url', ''),
             text=results['documents'][0] if results['documents'] and len(results['documents']) > 0 else '',
             embedding=embedding,
-            metadata=metadata_json
+            metadata_json=metadata_json
         )
 
     def get_documents_by_substance(
@@ -280,7 +298,7 @@ class ChromaDatabase(VectorDatabase):
                     source_url=metadata.get('source_url', ''),
                     text=results['documents'][i] if results['documents'] and i < len(results['documents']) else '',
                     embedding=embedding,
-                    metadata=metadata_json
+                    metadata_json=metadata_json
                 ))
                 count += 1
 
@@ -371,3 +389,6 @@ class ChromaDatabase(VectorDatabase):
                     if value:
                         values.add(value)
         return sorted(list(values))
+
+
+

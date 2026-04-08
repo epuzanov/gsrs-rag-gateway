@@ -4,6 +4,8 @@ GSRS RAG Gateway - API Schemas
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 
+from app.models.db import VectorDocument
+
 
 class IngestRequest(BaseModel):
     """Request to ingest a substance document."""
@@ -31,6 +33,14 @@ class QueryResult(BaseModel):
     text: str
     similarity_score: float
     metadata: Dict[str, Any]
+
+    def __init__(self, chunk: VectorDocument, score: float = 0.0):
+        """Accept `chunk` and `score` constructor input."""
+        self.element_path = str(chunk.section)
+        self.substance_uuid = str(chunk.document_id)
+        self.text = str(chunk.text)
+        self.similarity_score = score
+        self.metadata = chunk.metadata_json
 
 
 class QueryResponse(BaseModel):
@@ -84,6 +94,16 @@ class ERIResult(BaseModel):
     text: str = Field(..., description="Result text content")
     score: float = Field(..., description="Similarity score")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Result metadata")
+
+    def __init__(self, chunk: VectorDocument, score: float = 0.0):
+        """Accept `chunk` and `score` constructor input."""
+        self.id = str(chunk.chunk_id)
+        self.text = str(chunk.text)
+        self.score = score
+        self.metadata = chunk.metadata_json or {}
+        self.metadata["section"] = str(chunk.section)
+        self.metadata["document_id"] = str(chunk.document_id)
+        self.metadata["source_url"] = str(chunk.source_url)
 
 
 class ERIQueryResponse(BaseModel):

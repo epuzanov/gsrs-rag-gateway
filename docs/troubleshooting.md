@@ -216,7 +216,7 @@ docker-compose exec postgres psql -U postgres -d gsrs_rag \
 2. Create index if missing:
 ```sql
 CREATE INDEX IF NOT EXISTS idx_embedding_hnsw 
-ON substance_chunks 
+ON chunks 
 USING hnsw (embedding vector_cosine_ops)
 WITH (m = 16, ef_construction = 64);
 ```
@@ -446,11 +446,11 @@ docker-compose logs -f rag-gateway
 docker-compose exec postgres psql -U postgres -d gsrs_rag
 
 # Count chunks
-SELECT COUNT(*) FROM substance_chunks;
+SELECT COUNT(*) FROM chunks;
 
 # Check vector dimension
 SELECT pg_typeof(embedding), vector_dims(embedding)
-FROM substance_chunks LIMIT 1;
+FROM chunks LIMIT 1;
 ```
 
 ## Getting Help

@@ -59,10 +59,10 @@ class EmbeddingService:
     def _build_payload(self, input_data: str | List[str]) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": self.model,
-            "dimensions": self.dimension,
             "input": input_data,
         }
         if self.url.endswith("/embeddings"):
+            payload["dimensions"] = self.dimension
             payload["encoding_format"] = "float"
         return payload
 

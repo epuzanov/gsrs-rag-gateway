@@ -27,7 +27,7 @@ pip install -r requirements.txt
 # 4. Configure environment
 cp .env.example .env
 # Edit .env:
-#   DATABASE_URL=chroma://./chroma_data/substance_chunks
+#   DATABASE_URL=chroma://./chroma_data/chunks
 #   EMBEDDING_API_KEY=sk-your-key-here
 
 # 5. Set API key
@@ -68,7 +68,7 @@ ollama pull nomic-embed-text
 # 3. Configure environment
 cp .env.example .env
 # Edit .env:
-#   DATABASE_URL=chroma://./chroma_data/substance_chunks
+#   DATABASE_URL=chroma://./chroma_data/chunks
 #   EMBEDDING_BASE_URL=http://localhost:11434/v1
 #   EMBEDDING_MODEL=nomic-embed-text
 #   EMBEDDING_DIMENSION=768
@@ -203,7 +203,7 @@ Minimal configuration:
 
 ```bash
 # Database (ChromaDB by default)
-DATABASE_URL=chroma://./chroma_data/substance_chunks
+DATABASE_URL=chroma://./chroma_data/chunks
 
 # Embeddings (OpenAI)
 EMBEDDING_API_KEY=sk-your-key

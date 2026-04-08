@@ -26,7 +26,7 @@ POSTGRES_DB=gsrs_rag
 
 # ChromaDB (for chroma backend)
 CHROMA_PERSIST_DIR=./chroma_data
-CHROMA_COLLECTION=substance_chunks
+CHROMA_COLLECTION=chunks
 ```
 
 ## Using pgvector (Production)
@@ -84,7 +84,7 @@ pip install chromadb
 ```bash
 VECTOR_BACKEND=chroma
 CHROMA_PERSIST_DIR=./chroma_data
-CHROMA_COLLECTION=substance_chunks
+CHROMA_COLLECTION=chunks
 ```
 
 ### Features

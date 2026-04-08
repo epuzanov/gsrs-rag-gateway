@@ -41,7 +41,7 @@ pip install -r requirements.txt
 # Configure environment
 cp .env.example .env
 # Edit .env:
-#   DATABASE_URL=chroma://./chroma_data/substance_chunks
+#   DATABASE_URL=chroma://./chroma_data/chunks
 #   EMBEDDING_API_KEY=sk-your-openai-key
 
 # Start the server

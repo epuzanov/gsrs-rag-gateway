@@ -210,10 +210,10 @@ Environment variables (`.env` file):
 # =============================================================================
 # Database URL - Schema determines backend automatically:
 # - PostgreSQL: postgresql://user:pass@host:port/dbname
-# - ChromaDB: chroma://./chroma_data/substance_chunks
+# - ChromaDB: chroma://./chroma_data/chunks
 
 # For ChromaDB (Development/Testing - Default):
-DATABASE_URL=chroma://./chroma_data/substance_chunks
+DATABASE_URL=chroma://./chroma_data/chunks
 
 # For PostgreSQL (Production - uncomment):
 # DATABASE_URL=postgresql://gsrs:your_secure_password@localhost:5432/gsrs_rag

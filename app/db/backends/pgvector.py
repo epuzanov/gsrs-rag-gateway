@@ -57,13 +57,13 @@ class PGVectorDatabase(VectorDatabase):
         if self.engine:
             with self.engine.connect() as conn:
                 conn.execute(text("""
-                    ALTER TABLE substance_chunks
+                    ALTER TABLE chunks
                     ALTER COLUMN embedding
                     TYPE Vector(%s);
                 """%dimension))
                 conn.execute(text("""
                     CREATE INDEX IF NOT EXISTS idx_embedding_hnsw
-                    ON substance_chunks
+                    ON chunks
                     USING hnsw (embedding vector_cosine_ops)
                     WITH (m = 16, ef_construction = 64)
                 """))

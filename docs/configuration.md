@@ -8,19 +8,19 @@ Complete configuration reference for the GSRS RAG Gateway.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `chroma://./chroma_data/substance_chunks` | Database connection URL (scheme determines backend) |
+| `DATABASE_URL` | `chroma://./chroma_data/chunks` | Database connection URL (scheme determines backend) |
 
 **Database URL Formats:**
 
 ```bash
 # ChromaDB (local/embedded)
-DATABASE_URL=chroma://./chroma_data/substance_chunks
+DATABASE_URL=chroma://./chroma_data/chunks
 
 # PostgreSQL with pgvector
-DATABASE_URL=postgresql://user:password@host:5432/substance_chunks
+DATABASE_URL=postgresql://user:password@host:5432/gsrs_rag
 
 # PostgreSQL with SSL
-DATABASE_URL=postgresql://user:password@host:5432/substance_chunks?sslmode=require
+DATABASE_URL=postgresql://user:password@host:5432/gsrs_rag?sslmode=require
 ```
 
 ### Embedding API Configuration
@@ -58,7 +58,7 @@ DATABASE_URL=postgresql://user:password@host:5432/substance_chunks?sslmode=requi
 
 ```bash
 # Database (local ChromaDB)
-DATABASE_URL=chroma://./chroma_data/substance_chunks
+DATABASE_URL=chroma://./chroma_data/chunks
 
 # Embeddings (OpenAI)
 EMBEDDING_API_KEY=sk-your-openai-key
@@ -103,7 +103,7 @@ EMBEDDING_BASE_URL=https://your-resource.openai.azure.com/openai/deployments/you
 
 ```bash
 # Database (local ChromaDB)
-DATABASE_URL=chroma://./chroma_data/substance_chunks
+DATABASE_URL=chroma://./chroma_data/chunks
 
 # Embeddings (Ollama)
 EMBEDDING_BASE_URL=http://localhost:11434/v1
@@ -120,7 +120,7 @@ API_PASSWORD=admin123
 For local testing without authentication, set simple credentials:
 
 ```bash
-DATABASE_URL=chroma://./chroma_data/substance_chunks
+DATABASE_URL=chroma://./chroma_data/chunks
 EMBEDDING_API_KEY=sk-test-key
 API_USERNAME=test
 API_PASSWORD=test
@@ -154,7 +154,7 @@ services:
   rag-gateway:
     image: gsrs-rag-gateway:latest
     environment:
-      - DATABASE_URL=chroma://./chroma_data/substance_chunks
+      - DATABASE_URL=chroma://./chroma_data/chunks
       - EMBEDDING_API_KEY=${EMBEDDING_API_KEY}
     ports:
       - "8000:8000"
@@ -254,7 +254,7 @@ For better performance with ChromaDB:
 
 ```bash
 # Use SSD for persist directory
-DATABASE_URL=chroma:///ssd/chroma_data/substance_chunks
+DATABASE_URL=chroma:///ssd/chroma_data/chunks
 ```
 
 ### PostgreSQL Tuning
@@ -269,7 +269,7 @@ work_mem = 64MB
 
 # HNSW index parameters
 CREATE INDEX idx_embedding_hnsw
-ON substance_chunks
+ON chunks
 USING hnsw (embedding vector_cosine_ops)
 WITH (m = 16, ef_construction = 64);
 ```
@@ -311,7 +311,7 @@ python -c "from app.config import settings; print(settings.database_url)"
 ```bash
 # ChromaDB URL
 echo $DATABASE_URL
-# Expected: chroma://./chroma_data/substance_chunks
+# Expected: chroma://./chroma_data/chunks
 
 # PostgreSQL URL
 echo $DATABASE_URL
