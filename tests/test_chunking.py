@@ -190,3 +190,74 @@ class TestChunkerService(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
+
+class TestEmbeddingColumnType(unittest.TestCase):
+    """Tests for dynamic embedding column type (Vector vs HalfVec)."""
+
+    def test_embedding_column_exists_on_model(self):
+        """Test that embedding column is defined on VectorDocument."""
+        columns = {c.key for c in VectorDocument.__table__.columns}
+        self.assertIn("embedding", columns)
+
+    def test_embedding_column_uses_correct_type_for_current_dimension(self):
+        """Test embedding column type matches current EMBEDDING_DIMENSION setting."""
+        from pgvector.sqlalchemy import Vector, HALFVEC
+        from app.config import settings
+
+        col = VectorDocument.__table__.columns.embedding
+        if settings.embedding_dimension > 2000:
+            self.assertIsInstance(col.type, HALFVEC)
+            self.assertEqual(col.type.dimensions, settings.embedding_dimension)
+        else:
+            self.assertIsInstance(col.type, Vector)
+            self.assertEqual(col.type.dimensions, settings.embedding_dimension)
+
+    def test_hnsw_index_exists_in_table_args(self):
+        """Test HNSW index is defined in __table_args__."""
+        indexes = VectorDocument.__table__.indexes
+        hnsw_index = None
+        for idx in indexes:
+            if idx.name == "idx_embedding_hnsw":
+                hnsw_index = idx
+                break
+
+        self.assertIsNotNone(hnsw_index, "idx_embedding_hnsw should be in __table_args__")
+
+        # Check the index covers the embedding column
+        col_names = [c.name for c in hnsw_index.columns]
+        self.assertIn("embedding", col_names)
+
+    def test_hnsw_index_uses_correct_operator_class(self):
+        """Test HNSW index dialect kwargs have correct postgresql_ops."""
+        from app.config import settings
+
+        indexes = {idx.name: idx for idx in VectorDocument.__table__.indexes}
+        hnsw_index = indexes.get("idx_embedding_hnsw")
+        self.assertIsNotNone(hnsw_index)
+
+        # Check postgresql dialect options
+        dialect_kwargs = hnsw_index.dialect_kwargs
+        self.assertEqual(dialect_kwargs.get("postgresql_using"), "hnsw")
+        self.assertIn("postgresql_with", dialect_kwargs)
+        self.assertIn("postgresql_ops", dialect_kwargs)
+
+        expected_op_class = (
+            "halfvec_cosine_ops"
+            if settings.embedding_dimension > 2000
+            else "vector_cosine_ops"
+        )
+        self.assertEqual(
+            dialect_kwargs["postgresql_ops"]["embedding"],
+            expected_op_class,
+        )
+
+    def test_hnsw_index_hnsw_parameters(self):
+        """Test HNSW index has correct m and ef_construction values."""
+        indexes = {idx.name: idx for idx in VectorDocument.__table__.indexes}
+        hnsw_index = indexes.get("idx_embedding_hnsw")
+        self.assertIsNotNone(hnsw_index)
+
+        dialect_kwargs = hnsw_index.dialect_kwargs
+        postgresql_with = dialect_kwargs.get("postgresql_with", {})
+        self.assertEqual(postgresql_with.get("m"), 16)
+        self.assertEqual(postgresql_with.get("ef_construction"), 64)

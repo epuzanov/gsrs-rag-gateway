@@ -8,7 +8,9 @@ from sqlalchemy import String, Text, DateTime, JSON, Index
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql import func as sql_func
-from pgvector.sqlalchemy import Vector
+from pgvector.sqlalchemy import Vector, HALFVEC as HalfVec
+
+from app.config import settings
 
 
 class Base(DeclarativeBase):
@@ -42,8 +44,12 @@ class VectorDocument(Base):
     # The actual text content of the chunk
     text: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Vector embedding
-    embedding: Mapped[List[float]] = mapped_column(Vector(), nullable=False)
+    # Vector embedding (uses HalfVec for dimensions > 2000)
+    embedding: Mapped[List[float]] = mapped_column(
+        HalfVec(settings.embedding_dimension) if settings.embedding_dimension > 2000 else Vector(settings.embedding_dimension),
+        nullable=False,
+        index=True,
+    )
 
     # Metadata containing all element attributes from gsrs.model:
     # - canonical_name: preferred substance name
@@ -60,6 +66,13 @@ class VectorDocument(Base):
         Index('idx_document_id', 'document_id'),
         Index('idx_section', 'section'),
         Index('idx_source_url', 'source_url'),
+        Index(
+            'idx_embedding_hnsw',
+            'embedding',
+            postgresql_using='hnsw',
+            postgresql_with={'m': 16, 'ef_construction': 64},
+            postgresql_ops={'embedding': "halfvec_cosine_ops" if settings.embedding_dimension > 2000 else "vector_cosine_ops"},
+        ),
     )
 
     def __init__(self, *args: Any, **kwargs: Any):

@@ -6,11 +6,14 @@ import shutil
 import tempfile
 import time
 import unittest
-from uuid import uuid4
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
+from pgvector.sqlalchemy import Vector, HALFVEC
+
+from app.config import settings
 from app.db.factory import create_vector_database, get_available_backends
-from app.models import VectorDocument, DBQueryResult
+from app.models import Base, VectorDocument, DBQueryResult
 
 # Alias for backward compatibility in tests
 QueryResult = DBQueryResult
@@ -25,9 +28,7 @@ class TestChromaDatabase(unittest.TestCase):
         """Set up ChromaDB for testing."""
         self.test_dir = tempfile.mkdtemp()
         chroma_url = f"chroma://{self.test_dir}/test_collection"
-        self.db = create_vector_database(
-            database_url=chroma_url
-        )
+        self.db = create_vector_database(database_url=chroma_url)
         self.db.connect()
         self.db.initialize(dimension=self.test_dimension)
 
@@ -39,7 +40,7 @@ class TestChromaDatabase(unittest.TestCase):
                 text=f"Test chunk text {i}",
                 embedding=[float(i + 1)] * self.test_dimension,
                 metadata_json={"test": f"value_{i}"},
-                source_url="test_source"
+                source_url="test_source",
             )
             for i in range(5)
         ]
@@ -96,7 +97,7 @@ class TestChromaDatabase(unittest.TestCase):
                 text=f"Substance chunk {i}",
                 embedding=[0.1] * self.test_dimension,
                 metadata_json={},
-                source_url="test"
+                source_url="test",
             )
             for i in range(3)
         ]
@@ -113,7 +114,7 @@ class TestChromaDatabase(unittest.TestCase):
         query_embedding = [1.0] * self.test_dimension
         results = self.db.similarity_search(
             query_embedding=query_embedding,
-            top_k=3
+            top_k=3,
         )
 
         self.assertLessEqual(len(results), 3)
@@ -127,7 +128,7 @@ class TestChromaDatabase(unittest.TestCase):
         results = self.db.similarity_search(
             query_embedding=query_embedding,
             top_k=5,
-            filters={"test": "value_0"}
+            filters={"test": "value_0"},
         )
 
         self.assertGreater(len(results), 0)
@@ -145,7 +146,7 @@ class TestChromaDatabase(unittest.TestCase):
                 text=f"To delete {i}",
                 embedding=[0.1] * self.test_dimension,
                 metadata_json={},
-                source_url="test"
+                source_url="test",
             )
             for i in range(3)
         ]
@@ -194,7 +195,7 @@ class TestChromaDatabase(unittest.TestCase):
             text="Original text",
             embedding=[0.1] * self.test_dimension,
             metadata={"version": 1},
-            source_url="test"
+            source_url="test",
         )
 
         count = self.db.upsert_documents([doc])
@@ -219,11 +220,10 @@ class TestFactory(unittest.TestCase):
         """Test creating ChromaDB instance."""
         with tempfile.TemporaryDirectory() as tmpdir:
             chroma_url = f"chroma://{tmpdir}/test_collection"
-            db = create_vector_database(
-                database_url=chroma_url
-            )
+            db = create_vector_database(database_url=chroma_url)
 
             from app.db.backends.chroma import ChromaDatabase
+
             self.assertIsInstance(db, ChromaDatabase)
 
     def test_create_pgvector_database(self):
@@ -231,10 +231,11 @@ class TestFactory(unittest.TestCase):
         try:
             db = create_vector_database(
                 backend="pgvector",
-                database_url="postgresql://test:test@localhost/test"
+                database_url="postgresql://test:test@localhost/test",
             )
 
             from app.db.backends.pgvector import PGVectorDatabase
+
             self.assertIsInstance(db, PGVectorDatabase)
         except ImportError:
             self.skipTest("pgvector not installed")
@@ -242,9 +243,7 @@ class TestFactory(unittest.TestCase):
     def test_create_unknown_backend(self):
         """Test creating unknown backend raises error."""
         with self.assertRaises(ValueError) as context:
-            create_vector_database(
-                database_url="unknown://localhost/test"
-            )
+            create_vector_database(database_url="unknown://localhost/test")
 
         self.assertIn("Unknown database scheme", str(context.exception))
 
@@ -269,9 +268,8 @@ class TestPGVectorDatabase(unittest.TestCase):
 
         executed_sql = [call.args[0].text.strip() for call in conn.execute.call_args_list]
         self.assertEqual(executed_sql[0], "CREATE EXTENSION IF NOT EXISTS vector;")
-        self.assertTrue(any("CREATE INDEX IF NOT EXISTS idx_embedding_hnsw" in sql for sql in executed_sql))
         create_all.assert_called_once_with(bind=engine)
-        self.assertEqual(conn.commit.call_count, 2)
+        conn.commit.assert_called_once()
 
     def test_upsert_documents_targets_unique_chunk_id(self):
         from app.db.backends.pgvector import PGVectorDatabase
@@ -287,7 +285,7 @@ class TestPGVectorDatabase(unittest.TestCase):
             text="Updated text",
             embedding=[0.1, 0.2, 0.3],
             metadata_json={"version": 2},
-            source_url="test"
+            source_url="test",
         )
 
         insert_stmt = MagicMock()
@@ -310,9 +308,176 @@ class TestPGVectorDatabase(unittest.TestCase):
         session.close.assert_called_once()
         self.assertEqual(count, 1)
 
+    def test_disconnect_disposes_engine(self):
+        from app.db.backends import pgvector as pgvector_module
+
+        db = pgvector_module.PGVectorDatabase("postgresql://test:test@localhost/test")
+        mock_engine = MagicMock()
+        db.engine = mock_engine
+        db.SessionLocal = MagicMock()
+
+        db.disconnect()
+
+        mock_engine.dispose.assert_called_once()
+        self.assertIsNone(db.engine)
+        self.assertIsNone(db.SessionLocal)
+
+    def test_get_session_lazy_connect(self):
+        from app.db.backends import pgvector as pgvector_module
+
+        db = pgvector_module.PGVectorDatabase("postgresql://test:test@localhost/test")
+        db.engine = None
+        db.SessionLocal = None
+
+        original_connect = db.connect
+        call_tracker = MagicMock()
+
+        def fake_connect():
+            call_tracker()
+            db.SessionLocal = MagicMock()
+
+        db.connect = fake_connect
+        session = db._get_session()
+
+        call_tracker.assert_called_once()
+        self.assertIsNotNone(session)
+
+    def test_similarity_search_applies_section_filter(self):
+        from app.db.backends.pgvector import PGVectorDatabase
+
+        db = PGVectorDatabase("postgresql://test:test@localhost/test")
+        mock_session = MagicMock()
+        mock_query = MagicMock()
+        mock_session.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.limit.return_value = mock_query
+        mock_query.all.return_value = []
+        db._get_session = MagicMock(return_value=mock_session)
+
+        db.similarity_search(
+            query_embedding=[0.1] * 3,
+            top_k=5,
+            filters={"section": "codes"},
+        )
+
+        mock_query.filter.assert_called()
+        mock_session.close.assert_called_once()
+
+    def test_similarity_search_applies_document_id_filter(self):
+        from app.db.backends.pgvector import PGVectorDatabase
+
+        db = PGVectorDatabase("postgresql://test:test@localhost/test")
+        mock_session = MagicMock()
+        mock_query = MagicMock()
+        mock_session.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.limit.return_value = mock_query
+        mock_query.all.return_value = []
+        db._get_session = MagicMock(return_value=mock_session)
+
+        test_uuid = uuid4()
+        db.similarity_search(
+            query_embedding=[0.1] * 3,
+            top_k=5,
+            filters={"document_id": test_uuid},
+        )
+
+        mock_query.filter.assert_called()
+        mock_session.close.assert_called_once()
+
+    def test_delete_documents_by_substance_rolls_back_on_error(self):
+        from app.db.backends.pgvector import PGVectorDatabase
+
+        db = PGVectorDatabase("postgresql://test:test@localhost/test")
+        mock_session = MagicMock()
+        mock_session.query.return_value.filter.return_value.delete.side_effect = RuntimeError("DB error")
+        db._get_session = MagicMock(return_value=mock_session)
+
+        with self.assertRaises(RuntimeError):
+            db.delete_documents_by_substance(uuid4())
+
+        mock_session.rollback.assert_called_once()
+        mock_session.close.assert_called_once()
+
+    def test_delete_all_rolls_back_on_error(self):
+        from app.db.backends.pgvector import PGVectorDatabase
+
+        db = PGVectorDatabase("postgresql://test:test@localhost/test")
+        mock_session = MagicMock()
+        mock_session.query.return_value.delete.side_effect = RuntimeError("DB error")
+        db._get_session = MagicMock(return_value=mock_session)
+
+        with self.assertRaises(RuntimeError):
+            db.delete_all()
+
+        mock_session.rollback.assert_called_once()
+        mock_session.close.assert_called_once()
+
+    def test_get_statistics_returns_both_counters(self):
+        from app.db.backends.pgvector import PGVectorDatabase
+
+        db = PGVectorDatabase("postgresql://test:test@localhost/test")
+        mock_session = MagicMock()
+        mock_chunks_query = MagicMock()
+        mock_substances_query = MagicMock()
+        mock_session.query.side_effect = [mock_chunks_query, mock_substances_query]
+        mock_chunks_query.count.return_value = 42
+        mock_substances_query.distinct.return_value = mock_substances_query
+        mock_substances_query.count.return_value = 7
+        db._get_session = MagicMock(return_value=mock_session)
+
+        stats = db.get_statistics()
+
+        self.assertEqual(stats["total_chunks"], 42)
+        self.assertEqual(stats["total_substances"], 7)
+        mock_session.close.assert_called_once()
+
+    def test_get_unique_values_section(self):
+        from app.db.backends.pgvector import PGVectorDatabase
+
+        db = PGVectorDatabase("postgresql://test:test@localhost/test")
+        mock_session = MagicMock()
+        mock_query = MagicMock()
+        mock_session.query.return_value = mock_query
+        mock_query.all.return_value = [("names",), ("codes",), ("structure",)]
+        db._get_session = MagicMock(return_value=mock_session)
+
+        result = db.get_unique_values("section")
+
+        self.assertEqual(result, ["names", "codes", "structure"])
+        mock_session.close.assert_called_once()
+
+    def test_get_unique_values_source_url(self):
+        from app.db.backends.pgvector import PGVectorDatabase
+
+        db = PGVectorDatabase("postgresql://test:test@localhost/test")
+        mock_session = MagicMock()
+        mock_query = MagicMock()
+        mock_session.query.return_value = mock_query
+        mock_query.all.return_value = [("url1",), ("url2",), (None,)]
+        db._get_session = MagicMock(return_value=mock_session)
+
+        result = db.get_unique_values("source_url")
+
+        self.assertEqual(result, ["url1", "url2"])
+
+    def test_get_unique_values_unknown_field(self):
+        from app.db.backends.pgvector import PGVectorDatabase
+
+        db = PGVectorDatabase("postgresql://test:test@localhost/test")
+        mock_session = MagicMock()
+        db._get_session = MagicMock(return_value=mock_session)
+
+        result = db.get_unique_values("nonexistent")
+
+        self.assertEqual(result, [])
+        mock_session.close.assert_called_once()
+
 
 class TestVectorDocument(unittest.TestCase):
-    """Unit tests for VectorDocument dataclass."""
+    """Unit tests for VectorDocument model."""
 
     def test_create_document(self):
         """Test creating a VectorDocument."""
@@ -323,7 +488,7 @@ class TestVectorDocument(unittest.TestCase):
             text="Test text",
             embedding=[0.1, 0.2, 0.3],
             metadata={"key": "value"},
-            source_url="test"
+            source_url="test",
         )
 
         self.assertEqual(doc.chunk_id, "root_code")
@@ -340,10 +505,56 @@ class TestVectorDocument(unittest.TestCase):
             text="Test",
             embedding=[],
             metadata_json={},
-            source_url="test"
+            source_url="test",
         )
 
-        repr(doc)
+        self.assertIn("root_code", repr(doc))
+        self.assertIn("codes", repr(doc))
+
+    def test_values_returns_dict_with_all_fields(self):
+        """Test values() returns correct dict."""
+        doc_id = uuid4()
+        doc = VectorDocument(
+            chunk_id="root_test",
+            document_id=doc_id,
+            section="root",
+            text="Hello",
+            embedding=[1.0],
+            metadata_json={"k": "v"},
+            source_url="src",
+        )
+
+        vals = doc.values()
+        self.assertEqual(vals["document_id"], doc_id)
+        self.assertEqual(vals["section"], "root")
+        self.assertEqual(vals["text"], "Hello")
+        self.assertEqual(vals["metadata_json"], {"k": "v"})
+
+    def test_set_embedding(self):
+        """Test set_embedding helper."""
+        doc = VectorDocument(
+            chunk_id="root_test",
+            document_id=uuid4(),
+            section="root",
+            text="Test",
+            embedding=[0.0],
+            metadata_json={},
+        )
+
+        doc.set_embedding([1.0, 2.0, 3.0])
+        self.assertEqual(doc.embedding, [1.0, 2.0, 3.0])
+
+    def test_constructor_metadata_alias(self):
+        """Test constructor accepts 'metadata' and stores as 'metadata_json'."""
+        doc = VectorDocument(
+            chunk_id="root_test",
+            document_id=uuid4(),
+            section="root",
+            text="Test",
+            embedding=[],
+            metadata={"foo": "bar"},
+        )
+        self.assertEqual(doc.metadata_json, {"foo": "bar"})
 
 
 class TestQueryResult(unittest.TestCase):
@@ -358,13 +569,94 @@ class TestQueryResult(unittest.TestCase):
             text="Test",
             embedding=[],
             metadata_json={},
-            source_url="test"
+            source_url="test",
         )
 
         result = QueryResult(document=doc, score=0.95)
 
         self.assertEqual(result.score, 0.95)
         self.assertEqual(result.document.chunk_id, "root_code")
+
+
+class TestEmbeddingColumnType(unittest.TestCase):
+    """Tests for dynamic embedding column type (Vector vs HalfVec)."""
+
+    def test_embedding_column_exists(self):
+        """Test that embedding column is defined on VectorDocument."""
+        columns = {c.key for c in VectorDocument.__table__.columns}
+        self.assertIn("embedding", columns)
+
+    def test_embedding_column_type_matches_current_dimension(self):
+        """Test embedding column type matches current EMBEDDING_DIMENSION."""
+        col = VectorDocument.__table__.columns.embedding
+        if settings.embedding_dimension > 2000:
+            self.assertIsInstance(col.type, HALFVEC)
+            self.assertEqual(col.type.dim, settings.embedding_dimension)
+        else:
+            self.assertIsInstance(col.type, Vector)
+            self.assertEqual(col.type.dim, settings.embedding_dimension)
+
+    def test_hnsw_index_exists(self):
+        """Test HNSW index is defined in __table_args__."""
+        indexes = {idx.name: idx for idx in VectorDocument.__table__.indexes}
+        self.assertIn("idx_embedding_hnsw", indexes)
+
+    def test_hnsw_index_covers_embedding_column(self):
+        """Test HNSW index includes the embedding column."""
+        indexes = {idx.name: idx for idx in VectorDocument.__table__.indexes}
+        hnsw_index = indexes["idx_embedding_hnsw"]
+        col_names = [c.name for c in hnsw_index.columns]
+        self.assertIn("embedding", col_names)
+
+    def test_hnsw_index_dialect_kwargs(self):
+        """Test HNSW index has correct PostgreSQL-specific options."""
+        indexes = {idx.name: idx for idx in VectorDocument.__table__.indexes}
+        hnsw_index = indexes["idx_embedding_hnsw"]
+
+        dk = hnsw_index.dialect_kwargs
+        self.assertEqual(dk.get("postgresql_using"), "hnsw")
+        self.assertIn("postgresql_with", dk)
+        self.assertIn("postgresql_ops", dk)
+
+    def test_hnsw_index_operator_class(self):
+        """Test HNSW index uses correct operator class for current dimension."""
+        indexes = {idx.name: idx for idx in VectorDocument.__table__.indexes}
+        hnsw_index = indexes["idx_embedding_hnsw"]
+
+        expected_op = (
+            "halfvec_cosine_ops"
+            if settings.embedding_dimension > 2000
+            else "vector_cosine_ops"
+        )
+        self.assertEqual(
+            hnsw_index.dialect_kwargs["postgresql_ops"]["embedding"],
+            expected_op,
+        )
+
+    def test_hnsw_index_hnsw_parameters(self):
+        """Test HNSW index m and ef_construction values."""
+        indexes = {idx.name: idx for idx in VectorDocument.__table__.indexes}
+        hnsw_index = indexes["idx_embedding_hnsw"]
+
+        pw = hnsw_index.dialect_kwargs.get("postgresql_with", {})
+        self.assertEqual(pw.get("m"), 16)
+        self.assertEqual(pw.get("ef_construction"), 64)
+
+    def test_embedding_column_type_vector_for_low_dimension(self):
+        """Test Vector type is used when dimension <= 2000."""
+        if settings.embedding_dimension > 2000:
+            self.skipTest("Only applies when EMBEDDING_DIMENSION <= 2000")
+
+        col = VectorDocument.__table__.columns.embedding
+        self.assertIsInstance(col.type, Vector)
+
+    def test_embedding_column_type_halfvec_for_high_dimension(self):
+        """Test HalfVec type is used when dimension > 2000."""
+        if settings.embedding_dimension <= 2000:
+            self.skipTest("Only applies when EMBEDDING_DIMENSION > 2000")
+
+        col = VectorDocument.__table__.columns.embedding
+        self.assertIsInstance(col.type, HALFVEC)
 
 
 if __name__ == "__main__":

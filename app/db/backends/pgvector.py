@@ -54,21 +54,6 @@ class PGVectorDatabase(VectorDatabase):
 
         Base.metadata.create_all(bind=self.engine)
 
-        if self.engine:
-            with self.engine.connect() as conn:
-                conn.execute(text("""
-                    ALTER TABLE chunks
-                    ALTER COLUMN embedding
-                    TYPE Vector(%s);
-                """%dimension))
-                conn.execute(text("""
-                    CREATE INDEX IF NOT EXISTS idx_embedding_hnsw
-                    ON chunks
-                    USING hnsw (embedding vector_cosine_ops)
-                    WITH (m = 16, ef_construction = 64)
-                """))
-                conn.commit()
-
     def _get_session(self) -> Session:
         """Get a database session."""
         if self.SessionLocal is None:
